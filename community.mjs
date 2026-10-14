@@ -1,10 +1,10 @@
-import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs?v=20261014-community';
-import {importSong,exportSong} from './music.mjs?v=20261014-community';
+import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs?v=20261014-upload';
+import {importSong,exportSong} from './music.mjs?v=20261014-upload';
 const $ = id=>document.getElementById(id);
 export function setupCommunity({getCurrentSong,loadSong,toast}) {
  let page=0, rows=[], pending=false;
  const status = message=>{$('communityStatus').textContent=message;};
- function account() { const user=currentUser(); $('accountLabel').textContent=user?'Đã đăng nhập':'Đăng nhập'; $('loginPanel').hidden=!!user; $('logoutBtn').hidden=!user; $('sharePanel').hidden=!user; $('passwordPanel').hidden=!user; $('accountLabel').textContent=user?user.email:'Đăng nhập'; }
+ function account() { const user=currentUser(); $('accountLabel').textContent=user?'Đã đăng nhập':'Đăng nhập'; $('loginPanel').hidden=!!user; $('logoutBtn').hidden=!user; $('sharePanel').hidden=!user; $('uploadLoginGate').hidden=!!user; $('passwordPanel').hidden=!user; $('accountLabel').textContent=user?user.email:'Đăng nhập'; }
  function node(tag,text,className) { const el=document.createElement(tag); el.textContent=text; if(className) el.className=className; return el; }
  async function guarded(fn) { if(pending) return; pending=true; try {await fn();} catch(e) {status(e.message); toast(e.message);} finally {pending=false; account();} }
  function render() {

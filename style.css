@@ -18,3 +18,5 @@
 .selection-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:0 0 16px}.selection-toolbar small{flex-basis:100%;color:var(--muted);line-height:1.7}.selection-toolbar span{font-size:12px;margin-right:auto}.selection-toolbar button{font-size:12px}#multiSelect[aria-pressed="true"]{background:#d8ec8c;color:#152019}
 
 .selection-box{position:absolute;border:1px solid #d6e98b;background:#d6e98b25;pointer-events:none;z-index:5}.note-grid.selecting-mode{cursor:crosshair;touch-action:none;user-select:none}
+
+.publish-card{padding:24px;border:1px solid var(--line);border-radius:12px;background:var(--panel);margin:24px 0}.publish-card h2{margin:0 0 12px;font-size:21px}.publish-card #sharePanel{max-width:560px}.publish-card p{color:var(--muted);line-height:1.7}#uploadBtn{white-space:nowrap}@media(max-width:700px){.topbar{height:auto;min-height:72px;padding-top:12px;padding-bottom:12px}.publish-card{padding:18px}.header-actions{flex-wrap:wrap;justify-content:flex-end}}

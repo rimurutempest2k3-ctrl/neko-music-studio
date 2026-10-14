@@ -1,6 +1,7 @@
-import {moveNote,playbackSlice} from './editing.mjs?v=20261014-community';
-import {drafts,setupLibrary} from './library.mjs?v=20261014-community';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-community';
+import {groupDelta,moveGroup,copyGroup,pasteGroup} from './selection.mjs?v=20261014-selection';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261014-selection';
+import {drafts,setupLibrary} from './library.mjs?v=20261014-selection';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-selection';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
@@ -12,6 +13,7 @@ let undo = [], redo = [], toastTimer, playing = false, animation, audio, activeV
 let playbackOffset=0;
 let playbackEvents = [], playbackIndex = 0, lastFrameTime = 0, highlightedNote = null, highlightedKey = null;
 const noteElements = new Map();
+let groupIds=new Set(),multiMode=false,noteClipboard=[];
 function blank() { return { title: 'Giai điệu đầu tiên', tps: 20, notes: [], controls: [], nextId: 1 }; }
 function demo() {
   const result = parseSequence('1 1 5 5 6 6 5 - 4 4 3 3 2 2 1 - 5 - 6 - i - 5', 0, 10, 1);
@@ -19,7 +21,7 @@ function demo() {
 }
 function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 4000); }
 function snapshot() { return JSON.stringify({ project, cursor, viewTicks, draftId }); }
-function restore(value) { const data = JSON.parse(value); project = data.project; draftId=data.draftId || crypto.randomUUID(); cursor = data.cursor; viewTicks = data.viewTicks; selected = null; render(); save(); }
+function restore(value) { const data = JSON.parse(value); project = data.project; draftId=data.draftId || crypto.randomUUID(); cursor = data.cursor; viewTicks = data.viewTicks; selected = null; groupIds.clear(); render(); save(); }
 function commit(action) { stopPlayback(false); const before = snapshot(); action(); if (snapshot() !== before) { undo.push(before); undo = undo.slice(-100); redo = []; } render(); save(); }
 function save() {
   try {
@@ -46,6 +48,9 @@ function ensureView() {
 }
 function tailTicks() { return Math.max(step * 8,Math.ceil(Math.max(0,$('rollScroll').clientWidth - 68) / (2 * zoom))); }
 function render() {
+  groupIds=new Set([...groupIds].filter(id=>project.notes.some(n=>n.id===id)));
+  if(!groupIds.size && selected?.kind==='note')groupIds.add(selected.id);
+  $('selectionCount').textContent=groupIds.size+' nốt được chọn'; $('copyNotes').disabled=!groupIds.size; $('pasteNotes').disabled=!noteClipboard.length; $('clearSelection').disabled=!groupIds.size; $('multiSelect').setAttribute('aria-pressed',String(multiMode));
   ensureView();
   $('title').value = project.title; $('songHeading').textContent = project.title.trim() || 'Bài không tên'; $('tps').value = project.tps;
   $('step').value = step; $('duration').value = duration; $('zoom').value = zoom;
@@ -77,7 +82,7 @@ function renderGrid() {
   noteElements.clear();
   for (const note of project.notes) {
     if (note.tick + note.duration <= pageStart || note.tick >= pageStart + visibleTicks) continue;
-    const el = make('button', `note${selected?.id === note.id ? ' selected' : ''}`, note.key === 8 ? 'i' : note.key);
+    const el = make('button', `note${groupIds.has(note.id) || selected?.id === note.id ? ' selected' : ''}`, note.key === 8 ? 'i' : note.key);
     el.dataset.tick = note.tick; el.dataset.key = note.key;
     noteElements.set(`${note.tick}:${note.key}`,el);
     el.style.left = `${Math.max(0, note.tick - pageStart) * zoom + 2}px`;
@@ -85,8 +90,8 @@ function renderGrid() {
     el.style.width = `${Math.max(8, (Math.min(note.tick + note.duration, pageStart + visibleTicks) - Math.max(note.tick, pageStart)) * zoom - 4)}px`;
     el.setAttribute('aria-label', `Phím ${note.key}, tick ${note.tick}, dài ${note.duration} tick`); el.title = el.getAttribute('aria-label');
     attachMoveHandle(el,note,pageStart);
-    el.onclick = e => { e.stopPropagation(); if(el.dataset.moved==='true'){el.dataset.moved='false';return;} choose({ kind: 'note', id: note.id }, note.tick); audition(note.key); };
-    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); commit(() => { project.notes = project.notes.filter(n => n.id !== note.id); selected = null; }); };
+    el.onclick = e => { e.stopPropagation(); if(el.dataset.moved==='true'){el.dataset.moved='false';return;} chooseNote(note,e.ctrlKey||e.metaKey||e.shiftKey||multiMode); if(groupIds.size<2)audition(note.key); };
+    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); commit(() => { project.notes = project.notes.filter(n => n.id !== note.id); selected = null; groupIds.clear(); }); };
     if (note.tick >= pageStart && note.tick + note.duration <= pageStart + visibleTicks) attachResizeHandle(el,note,pageStart,visibleTicks);
     $('noteGrid').append(el);
   }
@@ -96,20 +101,21 @@ function renderGrid() {
     const el = make('button', `control-marker${selected?.id === event.id ? ' selected' : ''}`, CONTROLS[event.control]); el.style.left = `${(event.tick - pageStart) * zoom + 2}px`;
     el.title = `${CONTROLS[event.control]} · tick ${event.tick}`;
     el.onclick = e => { e.stopPropagation(); choose({ kind: 'control', id: event.id }, event.tick); };
-    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); commit(() => { project.controls = project.controls.filter(c => c.id !== event.id); selected = null; }); };
+    el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); commit(() => { project.controls = project.controls.filter(c => c.id !== event.id); selected = null; groupIds.clear(); }); };
     $('controlLane').append(el);
   }
   $('rollSummary').textContent = `${project.notes.length} nốt · ${Math.ceil(viewTicks / 40)} ô nhịp${pageStart ? ` · trang từ ô ${pageStart / 40 + 1}` : ''}`;
 }
-function attachMoveHandle(el,note,pageStart) {
+function chooseNote(note,add=false){stopPlayback(false);if(add){if(groupIds.has(note.id))groupIds.delete(note.id);else groupIds.add(note.id);}else{groupIds=new Set([note.id]);}selected=groupIds.has(note.id)?{kind:'note',id:note.id}:null;cursor=note.tick;render();}
+function attachMoveHandle(el,note,pageStart){
  let drag=null;
- el.style.touchAction='none';el.title+=' · Kéo để di chuyển';
- el.onpointerdown=e=>{if(e.button!==0||e.target.closest('.note-resize'))return;e.preventDefault();e.stopPropagation();stopPlayback(false);drag={id:e.pointerId,x:e.clientX,y:e.clientY,currentX:e.clientX,scroll:$('rollScroll').scrollLeft,tick:note.tick,key:note.key,moved:false};el.setPointerCapture(e.pointerId);beginEdgeScroll(()=>drag?.currentX,update);};
- function update(x){if(!drag)return;const delta=x-drag.x+$('rollScroll').scrollLeft-drag.scroll;drag.tick=Math.max(pageStart,Math.min(pageStart+PAGE_TICKS-1,MAX_TICK-1,note.tick+Math.round(delta/(zoom*step))*step));el.style.left=((drag.tick-pageStart)*zoom+2)+'px';el.style.top=((8-drag.key)*43+7)+'px';expandCanvasToTick(drag.tick+note.duration+tailTicks());}
- el.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();drag.currentX=e.clientX;drag.key=Math.max(1,Math.min(8,note.key-Math.round((e.clientY-drag.y)/43)));drag.moved ||= Math.abs(e.clientX-drag.x)>4||Math.abs(e.clientY-drag.y)>4;update(e.clientX);};
- el.onpointerup=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();const value=drag;drag=null;endEdgeScroll();if(el.hasPointerCapture(e.pointerId))el.releasePointerCapture(e.pointerId);if(value.moved){el.dataset.moved='true';commit(()=>{project.notes=moveNote(project.notes,note,value.tick,value.key);cursor=value.tick;selected={kind:'note',id:note.id};});} };
+ el.style.touchAction='none';el.title+=' · Ctrl/Shift + nhấp để chọn nhiều · Kéo cả nhóm';
+ el.onpointerdown=e=>{if(e.button!==0||e.target.closest('.note-resize'))return;e.preventDefault();e.stopPropagation();stopPlayback(false);const ids=groupIds.has(note.id)?new Set(groupIds):new Set([note.id]);drag={id:e.pointerId,x:e.clientX,y:e.clientY,currentX:e.clientX,scroll:$('rollScroll').scrollLeft,ids,dt:0,dk:0,moved:false};el.setPointerCapture(e.pointerId);beginEdgeScroll(()=>drag?.currentX,update);};
+ function update(x){if(!drag)return;const delta=groupDelta(project.notes,drag.ids,Math.round((x-drag.x+$('rollScroll').scrollLeft-drag.scroll)/(zoom*step))*step,drag.dk);drag.dt=delta.dt;drag.dk=delta.dk;for(const n of project.notes.filter(n=>drag.ids.has(n.id))){const element=noteElements.get(n.tick+':'+n.key);if(element){element.style.transform='translate('+drag.dt*zoom+'px,'+(-drag.dk*43)+'px)';element.classList.add('selected');}expandCanvasToTick(n.tick+drag.dt+n.duration+tailTicks());}}
+ el.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();drag.currentX=e.clientX;drag.dk=-Math.round((e.clientY-drag.y)/43);drag.moved ||= Math.abs(e.clientX-drag.x)>4||Math.abs(e.clientY-drag.y)>4;update(e.clientX);};
+ el.onpointerup=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();const value=drag;drag=null;endEdgeScroll();if(el.hasPointerCapture(e.pointerId))el.releasePointerCapture(e.pointerId);if(value.moved){el.dataset.moved='true';try{const moved=moveGroup(project.notes,value.ids,value.dt,value.dk);commit(()=>{project.notes=moved;groupIds=value.ids;cursor=note.tick+value.dt;selected={kind:'note',id:note.id};});}catch(error){render();toast(error.message);}}};
  el.onpointercancel=()=>{drag=null;endEdgeScroll();render();};
- el.onkeydown=e=>{if(e.target!==el||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();commit(()=>{const tick=note.tick+(e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0),key=note.key+(e.key==='ArrowUp'?1:e.key==='ArrowDown'?-1:0);project.notes=moveNote(project.notes,note,tick,key);cursor=Math.max(0,tick);selected={kind:'note',id:note.id};});};
+ el.onkeydown=e=>{if(e.target!==el||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();try{const ids=groupIds.has(note.id)?groupIds:new Set([note.id]),delta=groupDelta(project.notes,ids,e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0,e.key==='ArrowUp'?1:e.key==='ArrowDown'?-1:0),moved=moveGroup(project.notes,ids,delta.dt,delta.dk);commit(()=>{project.notes=moved;groupIds=new Set(ids);cursor=note.tick+delta.dt;selected={kind:'note',id:note.id};});}catch(error){toast(error.message);}};
 }
 function attachResizeHandle(el,note,pageStart,visibleTicks) {
   const handle = make('span','note-resize','⋮');
@@ -183,7 +189,7 @@ function renderStats() {
   const warnings = diagnostics(project); $('warnings').hidden = !warnings.length; $('warnings').replaceChildren(...warnings.map(text => make('p', '', `ⓘ ${text}`)));
 }
 function tickAt(event, element) { const x = event.clientX - element.getBoundingClientRect().left; const start = Number($('canvas').dataset.start); return Math.min(MAX_TICK - duration, start + Math.floor(x / zoom / step) * step); }
-function setCursor(event, el) { stopPlayback(false); cursor = Math.max(0, tickAt(event, el)); selected = null; render(); save(); }
+function setCursor(event, el) { stopPlayback(false); cursor = Math.max(0, tickAt(event, el)); selected = null; groupIds.clear(); render(); save(); }
 $('ruler').onclick = e => setCursor(e, $('ruler'));
 $('controlLane').onclick = e => setCursor(e, $('controlLane'));
 $('noteGrid').onclick = e => {
@@ -204,16 +210,16 @@ for (const el of document.querySelectorAll('[data-control]')) el.onclick = () =>
   const event = existing ?? { id: project.nextId++, tick: cursor, control };
   if (!existing) project.controls.push(event); selected = { kind: 'control', id: event.id };
 });
-$('sequenceBtn').onclick = () => { try { const result = parseSequence($('sequence').value, cursor, duration, project.nextId); commit(() => { project.notes = replaceNotes(project.notes,result.notes); project.nextId = result.nextId; cursor = result.tick; selected = null; }); toast(`Đã thêm ${result.notes.length} nốt.`); scrollToCursor(); } catch (e) { toast(e.message); } };
+$('sequenceBtn').onclick = () => { try { const result = parseSequence($('sequence').value, cursor, duration, project.nextId); commit(() => { project.notes = replaceNotes(project.notes,result.notes); project.nextId = result.nextId; cursor = result.tick; selected = null; groupIds.clear(); }); toast(`Đã thêm ${result.notes.length} nốt.`); scrollToCursor(); } catch (e) { toast(e.message); } };
 $('title').oninput = () => { project.title = $('title').value; $('songHeading').textContent = project.title.trim() || 'Bài không tên'; save(); };
 $('tps').onchange = () => { try { const tps = integer(Number($('tps').value), 1, 1000, 'Tick / giây'); commit(() => { project.tps = tps; }); } catch(e) { toast(e.message); $('tps').value = project.tps; } };
 $('step').onchange = () => { step = Number($('step').value); render(); save(); };
 $('duration').onchange = () => { duration = Number($('duration').value); save(); };
 $('zoom').onchange = () => { zoom = Number($('zoom').value); render(); save(); };
-for (const [id, delta] of [['prevPage',-PAGE_TICKS],['nextPage',PAGE_TICKS]]) $(id).onclick = () => { stopPlayback(false); cursor = Math.max(0,Math.min(MAX_TICK-1, Math.floor(cursor/PAGE_TICKS)*PAGE_TICKS + delta)); selected = null; render(); $('rollScroll').scrollLeft = 0; save(); };
+for (const [id, delta] of [['prevPage',-PAGE_TICKS],['nextPage',PAGE_TICKS]]) $(id).onclick = () => { stopPlayback(false); cursor = Math.max(0,Math.min(MAX_TICK-1, Math.floor(cursor/PAGE_TICKS)*PAGE_TICKS + delta)); selected = null; groupIds.clear(); render(); $('rollScroll').scrollLeft = 0; save(); };
 function updateRestHint() { const ticks = Number($('restTicks').value); $('restHint').textContent = Number.isInteger(ticks) && ticks > 0 ? `${ticks} tick = ${(ticks / project.tps).toFixed(2)} giây không nhấn phím.` : 'Nhập số tick lớn hơn 0.'; }
 $('restTicks').oninput = updateRestHint;
-$('restBtn').onclick = () => { try { const ticks = integer(Number($('restTicks').value),1,MAX_TICK,'Khoảng nghỉ'); const value = insertRest(project,cursor,ticks); commit(() => { project = value; cursor += ticks; selected = null; }); toast(`Đã chèn ${(ticks / project.tps).toFixed(2)} giây nghỉ / hồi hơi.`); scrollToCursor(); } catch(e) { toast(e.message); } };
+$('restBtn').onclick = () => { try { const ticks = integer(Number($('restTicks').value),1,MAX_TICK,'Khoảng nghỉ'); const value = insertRest(project,cursor,ticks); commit(() => { project = value; cursor += ticks; selected = null; groupIds.clear(); }); toast(`Đã chèn ${(ticks / project.tps).toFixed(2)} giây nghỉ / hồi hơi.`); scrollToCursor(); } catch(e) { toast(e.message); } };
 $('noteKey').onchange = () => { const event = selectedEvent(); if (!event) return; commit(() => { if (selected.kind === 'note') project.notes = replaceNotes(project.notes,[{...event,key:Number($('noteKey').value)}]); else event.control = $('noteKey').value; }); };
 for (const [id, field, min] of [['noteTick', 'tick', 0], ['noteDuration', 'duration', 1]]) $(id).onchange = () => {
   const event = selectedEvent(); if (!event) return;
@@ -221,7 +227,7 @@ for (const [id, field, min] of [['noteTick', 'tick', 0], ['noteDuration', 'durat
     commit(() => { if (selected.kind === 'note') project.notes = replaceNotes(project.notes,[{...event,[field]:value}]); else event[field] = value; cursor = field === 'tick' ? value : event.tick; });
   } catch(e) { toast(e.message); renderInspector(); }
 };
-function deleteSelected() { if (!selected) return; commit(() => { if (selected.kind === 'note') project.notes = project.notes.filter(n => n.id !== selected.id); else project.controls = project.controls.filter(c => c.id !== selected.id); selected = null; }); }
+function deleteSelected() { if(groupIds.size){commit(()=>{project.notes=project.notes.filter(n=>!groupIds.has(n.id));groupIds.clear();selected=null;});return;} if (!selected) return; commit(() => { if (selected.kind === 'note') project.notes = project.notes.filter(n => n.id !== selected.id); else project.controls = project.controls.filter(c => c.id !== selected.id); selected = null; groupIds.clear(); }); }
 $('deleteBtn').onclick = deleteSelected;
 function undoAction() { if (!undo.length) return; stopPlayback(false); redo.push(snapshot()); restore(undo.pop()); }
 function redoAction() { if (!redo.length) return; stopPlayback(false); undo.push(snapshot()); restore(redo.pop()); }
@@ -231,6 +237,10 @@ document.onkeydown = e => {
   if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName) || document.querySelector('dialog[open]')) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redoAction() : undoAction(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redoAction(); }
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&groupIds.size){e.preventDefault();copyNotes();}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&noteClipboard.length){e.preventDefault();pasteNotes();}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){e.preventDefault();groupIds=new Set(project.notes.map(n=>n.id));selected=null;render();}
+  else if(e.key==='Escape'){groupIds.clear();selected=null;render();}
   else if (e.ctrlKey || e.metaKey || e.altKey) return;
   else if (/^[1-8]$/.test(e.key) && !e.repeat) addFromKeyboard(Number(e.key));
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
@@ -242,8 +252,8 @@ function confirmReplace(message, callback) {
   $('acceptConfirm').onclick = () => { $('confirmDialog').close(); callback(); };
 }
 $('cancelConfirm').onclick = () => $('confirmDialog').close();
-$('keepHighestBtn').onclick = () => confirmReplace('Giữ phím có số lớn nhất ở mỗi cột và bỏ các nốt còn lại. Nốt dài sẽ được thả trước nốt kế tiếp. Bạn có thể hoàn tác để khôi phục bài cũ.', () => { commit(() => { project.notes = keepHighest(project.notes); selected = null; }); toast('Đã chuyển bài sang một nốt tại mỗi thời điểm.'); });
-function replaceProject(value,id=crypto.randomUUID()) { save(); commit(() => { draftId=id; project = value; cursor = 0; selected = null; viewTicks = 160; }); $('rollScroll').scrollLeft = 0; }
+$('keepHighestBtn').onclick = () => confirmReplace('Giữ phím có số lớn nhất ở mỗi cột và bỏ các nốt còn lại. Nốt dài sẽ được thả trước nốt kế tiếp. Bạn có thể hoàn tác để khôi phục bài cũ.', () => { commit(() => { project.notes = keepHighest(project.notes); selected = null; groupIds.clear(); }); toast('Đã chuyển bài sang một nốt tại mỗi thời điểm.'); });
+function replaceProject(value,id=crypto.randomUUID()) { save(); commit(() => { draftId=id; project = value; cursor = 0; selected = null; groupIds.clear(); viewTicks = 160; }); $('rollScroll').scrollLeft = 0; }
 $('newBtn').onclick = () => confirmReplace('Bài hiện tại sẽ được thay bằng bản trống. Hãy xuất file nếu muốn giữ một bản riêng. Bạn vẫn có thể hoàn tác.', () => replaceProject(blank()));
 $('demoBtn').onclick = () => confirmReplace('Mở giai điệu mẫu để thử trình soạn. Bài hiện tại có thể khôi phục bằng Hoàn tác.', () => replaceProject(demo()));
 $('importBtn').onclick = () => $('fileInput').click();
@@ -284,7 +294,7 @@ async function play() {
     playbackOffset=fromTick/project.tps;startTime=ctx.currentTime+.1-playbackOffset;endTime=songEnd(project)/project.tps;
     playbackEvents=[];playbackIndex=0;lastFrameTime=ctx.currentTime;
     for(const event of playbackSlice(timeline,fromTick))for(const key of event.keys){const seconds=Math.max(.005,event.duration_ticks/project.tps-.06);voice(key,startTime+event.tick/project.tps,seconds,event.pitch,event.semitone);playbackEvents.push({tick:event.tick,key,durationTicks:Math.min(seconds,8)*project.tps});}
-    cursor=fromTick;selected=null;playing=true;$('playBtn').textContent='■';$('playBtn').setAttribute('aria-label','Dừng nghe thử');render();scrollToCursor();animate();
+    cursor=fromTick;selected=null;groupIds.clear();playing=true;$('playBtn').textContent='■';$('playBtn').setAttribute('aria-label','Dừng nghe thử');render();scrollToCursor();animate();
   } catch(e) { stopPlayback(false); toast(e.message); }
 }
 function animate() {
@@ -366,7 +376,7 @@ $('playhead').title = 'Giữ và kéo để chọn thời điểm';
 $('playhead').onpointerdown = event => {
   if (event.button !== 0) return;
   event.preventDefault(); event.stopPropagation(); stopPlayback(false);
-  cursorDrag = {pointerId:event.pointerId,original:cursor,currentX:event.clientX}; selected = null; renderInspector();
+  cursorDrag = {pointerId:event.pointerId,original:cursor,currentX:event.clientX}; selected = null; groupIds.clear(); renderInspector();
   document.querySelectorAll('.note.selected').forEach(el => el.classList.remove('selected'));
   $('playhead').classList.add('dragging'); $('playhead').setPointerCapture(event.pointerId);
   beginEdgeScroll(() => cursorDrag?.currentX,moveCursorToX);
@@ -395,7 +405,7 @@ $('playhead').onkeydown = event => {
   if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
   event.preventDefault(); event.stopPropagation(); stopPlayback(false);
   cursor = event.key === 'Home' ? 0 : event.key === 'End' ? Math.min(MAX_TICK - 1,songEnd(project)) : Math.max(0,Math.min(MAX_TICK - 1,cursor + (event.key === 'ArrowRight' ? step : -step)));
-  selected = null; render(); scrollToCursor(); save();
+  selected = null; groupIds.clear(); render(); scrollToCursor(); save();
 };
 function scrollToCursor() { const scroll = $('rollScroll'), x = (cursor - Number($('canvas').dataset.start)) * zoom + 68; if (x > scroll.scrollLeft + scroll.clientWidth - 70) scroll.scrollLeft = x - scroll.clientWidth + 100; else if (x < scroll.scrollLeft + 68) scroll.scrollLeft = Math.max(0, x - 68); }
 $('playBtn').onclick = () => playing ? stopPlayback(false) : play(); $('stopBtn').onclick = () => stopPlayback(true);
@@ -414,3 +424,7 @@ if(new URLSearchParams(location.hash.slice(1)).has('access_token')||new URLSearc
 if(new URLSearchParams(location.search).get('open')==='community'){
  try{const raw=sessionStorage.getItem('neko-community-open-song');if(raw){const song=importSong(JSON.parse(raw));replaceProject(song);sessionStorage.removeItem('neko-community-open-song');toast('Đã mở bài cộng đồng thành bản nháp.');}history.replaceState(null,'',location.pathname);}catch(e){toast(e.message);}
 }
+
+function copyNotes(){noteClipboard=copyGroup(project.notes,groupIds);render();toast('Đã sao chép '+noteClipboard.length+' nốt. Đặt con trỏ ở vị trí trống rồi Dán.');}
+function pasteNotes(){try{const result=pasteGroup(project.notes,noteClipboard,cursor,project.nextId);commit(()=>{project.notes=result.notes;project.nextId=result.nextId;groupIds=new Set(result.ids);selected=null;});}catch(e){toast(e.message);}}
+$('multiSelect').onclick=()=>{multiMode=!multiMode;render();};$('copyNotes').onclick=copyNotes;$('pasteNotes').onclick=pasteNotes;$('clearSelection').onclick=()=>{groupIds.clear();selected=null;render();};

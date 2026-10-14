@@ -1,7 +1,7 @@
-import {groupDelta,moveGroup,copyGroup,pasteGroup} from './selection.mjs?v=20261014-selection';
-import {moveNote,playbackSlice} from './editing.mjs?v=20261014-selection';
-import {drafts,setupLibrary} from './library.mjs?v=20261014-selection';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-selection';
+import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261014-box';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261014-box';
+import {drafts,setupLibrary} from './library.mjs?v=20261014-box';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-box';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
@@ -50,7 +50,7 @@ function tailTicks() { return Math.max(step * 8,Math.ceil(Math.max(0,$('rollScro
 function render() {
   groupIds=new Set([...groupIds].filter(id=>project.notes.some(n=>n.id===id)));
   if(!groupIds.size && selected?.kind==='note')groupIds.add(selected.id);
-  $('selectionCount').textContent=groupIds.size+' nốt được chọn'; $('copyNotes').disabled=!groupIds.size; $('pasteNotes').disabled=!noteClipboard.length; $('clearSelection').disabled=!groupIds.size; $('multiSelect').setAttribute('aria-pressed',String(multiMode));
+  $('selectionCount').textContent=groupIds.size+' nốt được chọn'; $('copyNotes').disabled=!groupIds.size; $('pasteNotes').disabled=!noteClipboard.length; $('clearSelection').disabled=!groupIds.size; $('multiSelect').setAttribute('aria-pressed',String(multiMode)); $('noteGrid').classList.toggle('selecting-mode',multiMode);
   ensureView();
   $('title').value = project.title; $('songHeading').textContent = project.title.trim() || 'Bài không tên'; $('tps').value = project.tps;
   $('step').value = step; $('duration').value = duration; $('zoom').value = zoom;
@@ -112,10 +112,10 @@ function attachMoveHandle(el,note,pageStart){
  el.style.touchAction='none';el.title+=' · Ctrl/Shift + nhấp để chọn nhiều · Kéo cả nhóm';
  el.onpointerdown=e=>{if(e.button!==0||e.target.closest('.note-resize'))return;e.preventDefault();e.stopPropagation();stopPlayback(false);const ids=groupIds.has(note.id)?new Set(groupIds):new Set([note.id]);drag={id:e.pointerId,x:e.clientX,y:e.clientY,currentX:e.clientX,scroll:$('rollScroll').scrollLeft,ids,dt:0,dk:0,moved:false};el.setPointerCapture(e.pointerId);beginEdgeScroll(()=>drag?.currentX,update);};
  function update(x){if(!drag)return;const delta=groupDelta(project.notes,drag.ids,Math.round((x-drag.x+$('rollScroll').scrollLeft-drag.scroll)/(zoom*step))*step,drag.dk);drag.dt=delta.dt;drag.dk=delta.dk;for(const n of project.notes.filter(n=>drag.ids.has(n.id))){const element=noteElements.get(n.tick+':'+n.key);if(element){element.style.transform='translate('+drag.dt*zoom+'px,'+(-drag.dk*43)+'px)';element.classList.add('selected');}expandCanvasToTick(n.tick+drag.dt+n.duration+tailTicks());}}
- el.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();drag.currentX=e.clientX;drag.dk=-Math.round((e.clientY-drag.y)/43);drag.moved ||= Math.abs(e.clientX-drag.x)>4||Math.abs(e.clientY-drag.y)>4;update(e.clientX);};
+ el.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();drag.currentX=e.clientX;drag.dk=0;drag.moved ||= Math.abs(e.clientX-drag.x)>4||Math.abs(e.clientY-drag.y)>4;update(e.clientX);};
  el.onpointerup=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();const value=drag;drag=null;endEdgeScroll();if(el.hasPointerCapture(e.pointerId))el.releasePointerCapture(e.pointerId);if(value.moved){el.dataset.moved='true';try{const moved=moveGroup(project.notes,value.ids,value.dt,value.dk);commit(()=>{project.notes=moved;groupIds=value.ids;cursor=note.tick+value.dt;selected={kind:'note',id:note.id};});}catch(error){render();toast(error.message);}}};
  el.onpointercancel=()=>{drag=null;endEdgeScroll();render();};
- el.onkeydown=e=>{if(e.target!==el||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();try{const ids=groupIds.has(note.id)?groupIds:new Set([note.id]),delta=groupDelta(project.notes,ids,e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0,e.key==='ArrowUp'?1:e.key==='ArrowDown'?-1:0),moved=moveGroup(project.notes,ids,delta.dt,delta.dk);commit(()=>{project.notes=moved;groupIds=new Set(ids);cursor=note.tick+delta.dt;selected={kind:'note',id:note.id};});}catch(error){toast(error.message);}};
+ el.onkeydown=e=>{if(e.target!==el||!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();e.stopPropagation();try{const ids=groupIds.has(note.id)?groupIds:new Set([note.id]),delta=groupDelta(project.notes,ids,e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0,0),moved=moveGroup(project.notes,ids,delta.dt,delta.dk);commit(()=>{project.notes=moved;groupIds=new Set(ids);cursor=note.tick+delta.dt;selected={kind:'note',id:note.id};});}catch(error){toast(error.message);}};
 }
 function attachResizeHandle(el,note,pageStart,visibleTicks) {
   const handle = make('span','note-resize','⋮');
@@ -193,6 +193,7 @@ function setCursor(event, el) { stopPlayback(false); cursor = Math.max(0, tickAt
 $('ruler').onclick = e => setCursor(e, $('ruler'));
 $('controlLane').onclick = e => setCursor(e, $('controlLane'));
 $('noteGrid').onclick = e => {
+  if(suppressBoxClick){suppressBoxClick=false;return;} if(multiMode||e.shiftKey)return;
   const tick = Math.max(0, tickAt(e, $('noteGrid'))), key = 8 - Math.floor((e.clientY - $('noteGrid').getBoundingClientRect().top) / 43);
   if (key < 1 || key > 8) return;
   commit(() => { const existing = project.notes.find(n => n.tick === tick && n.key === key); const note = existing ?? { id: project.nextId++, tick, key, duration }; project.notes = replaceNotes(project.notes,[note]); selected = { kind: 'note', id: note.id }; cursor = tick; }); audition(key);
@@ -428,3 +429,15 @@ if(new URLSearchParams(location.search).get('open')==='community'){
 function copyNotes(){noteClipboard=copyGroup(project.notes,groupIds);render();toast('Đã sao chép '+noteClipboard.length+' nốt. Đặt con trỏ ở vị trí trống rồi Dán.');}
 function pasteNotes(){try{const result=pasteGroup(project.notes,noteClipboard,cursor,project.nextId);commit(()=>{project.notes=result.notes;project.nextId=result.nextId;groupIds=new Set(result.ids);selected=null;});}catch(e){toast(e.message);}}
 $('multiSelect').onclick=()=>{multiMode=!multiMode;render();};$('copyNotes').onclick=copyNotes;$('pasteNotes').onclick=pasteNotes;$('clearSelection').onclick=()=>{groupIds.clear();selected=null;render();};
+
+let boxDrag=null,suppressBoxClick=false;
+const selectionBox=make('div','selection-box');selectionBox.setAttribute('aria-hidden','true');
+function updateBox(x){if(!boxDrag)return;const grid=$('noteGrid'),bounds=grid.getBoundingClientRect(),x2=Math.max(0,Math.min(grid.clientWidth,x-bounds.left)),y2=Math.max(0,Math.min(344,boxDrag.currentY-bounds.top));const box={x1:boxDrag.x,y1:boxDrag.y,x2,y2};
+ selectionBox.style.left=Math.min(box.x1,x2)+'px';selectionBox.style.top=Math.min(box.y1,y2)+'px';selectionBox.style.width=Math.abs(x2-box.x1)+'px';selectionBox.style.height=Math.abs(y2-box.y1)+'px';
+ groupIds=new Set([...boxDrag.base,...notesInBox(project.notes,box,zoom,Number($('canvas').dataset.start))]);for(const note of project.notes){const el=noteElements.get(note.tick+':'+note.key);if(el)el.classList.toggle('selected',groupIds.has(note.id));}
+ $('selectionCount').textContent=groupIds.size+' nốt được chọn';$('copyNotes').disabled=!groupIds.size;$('clearSelection').disabled=!groupIds.size;
+}
+$('noteGrid').onpointerdown=e=>{if(e.button!==0||e.target.closest('.note')||(!multiMode&&!e.shiftKey))return;e.preventDefault();stopPlayback(false);const bounds=$('noteGrid').getBoundingClientRect();boxDrag={id:e.pointerId,x:e.clientX-bounds.left,y:e.clientY-bounds.top,currentX:e.clientX,currentY:e.clientY,base:e.ctrlKey||e.metaKey||e.shiftKey?new Set(groupIds):new Set(),original:new Set(groupIds)};selected=null;selectionBox.hidden=false;$('noteGrid').append(selectionBox);$('noteGrid').setPointerCapture(e.pointerId);updateBox(e.clientX);beginEdgeScroll(()=>boxDrag?.currentX,updateBox);};
+$('noteGrid').onpointermove=e=>{if(!boxDrag||e.pointerId!==boxDrag.id)return;e.preventDefault();boxDrag.currentX=e.clientX;boxDrag.currentY=e.clientY;updateBox(e.clientX);};
+$('noteGrid').onpointerup=e=>{if(!boxDrag||e.pointerId!==boxDrag.id)return;e.preventDefault();updateBox(e.clientX);boxDrag=null;endEdgeScroll();selectionBox.remove();if($('noteGrid').hasPointerCapture(e.pointerId))$('noteGrid').releasePointerCapture(e.pointerId);suppressBoxClick=true;render();};
+$('noteGrid').onpointercancel=()=>{if(!boxDrag)return;groupIds=boxDrag.original;boxDrag=null;endEdgeScroll();selectionBox.remove();render();};

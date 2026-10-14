@@ -19,9 +19,11 @@ cho người dùng ngoài nhóm quản trị nếu máy chủ bật xác nhận 
 - Nháp tự lưu trên trình duyệt này; bài đang mở trước đây được chuyển vào danh sách.
   Mở bài khác không ghi đè nháp cũ. Nháp không đồng bộ qua tài khoản hoặc thiết bị.
 - Nhạc đã đăng lọc theo tài khoản ở máy chủ, hỗ trợ phân trang và gỡ bài.
-- Kéo thân nốt để đổi thời điểm / cao độ; mép phải để đổi độ dài. Mũi tên khi nốt
-  được chọn cũng di chuyển nốt. Thả vào cột đã có nốt sẽ thay nốt đó; có thể hoàn tác.
+- Kéo thân nốt hoặc dùng mũi tên trái/phải để đổi thời điểm, giữ nguyên cao độ;
+  mép phải để đổi độ dài. Di chuyển chồng nốt khác bị từ chối; có thể hoàn tác.
 - Chọn nhiều bằng nút Chọn nhiều hoặc Ctrl/Shift + nhấp; Ctrl+A chọn toàn bộ.
+  Bật Chọn nhiều rồi kéo trên vùng trống để tạo khung chọn như desktop, hoặc giữ
+  Shift khi kéo. Ctrl/Shift + kéo thêm nốt vào nhóm đã chọn.
   Sao chép / Ctrl+C, đặt con trỏ rồi Dán / Ctrl+V. Kéo nốt trong nhóm để di chuyển
   cả nhóm, giữ khoảng cách và cao độ tương đối. Nhóm chồng nốt khác bị từ chối.
 - Mặc định phát từ thanh cam, dừng rồi phát tiếp từ vị trí hiện tại. Chọn “Phát từ đầu”

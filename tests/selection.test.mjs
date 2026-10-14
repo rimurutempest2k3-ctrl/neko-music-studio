@@ -1,4 +1,6 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {groupDelta,moveGroup,copyGroup,pasteGroup} from '../selection.mjs';
+import {notesInBox} from '../selection.mjs';
+test('marquee intersects note bodies and works when dragged in reverse',()=>{const notes=[{id:1,tick:10,key:2,duration:5},{id:2,tick:20,key:7,duration:5},{id:3,tick:50,key:4,duration:5}];assert.deepEqual(notesInBox(notes,{x1:50,y1:0,x2:160,y2:310},6),[1,2]);assert.deepEqual(notesInBox(notes,{x1:160,y1:310,x2:50,y2:0},6),[1,2]);assert.deepEqual(notesInBox(notes,{x1:0,y1:0,x2:20,y2:20},6),[]);});
 const notes=[{id:1,tick:10,key:2,duration:5},{id:2,tick:20,key:7,duration:5},{id:3,tick:50,key:4,duration:5}],ids=new Set([1,2]);
 test('moving a group preserves spacing and bounds the whole group',()=>{assert.deepEqual(groupDelta(notes,ids,-20,5),{dt:-10,dk:1});const result=moveGroup(notes,ids,5,1);assert.deepEqual(result.map(n=>[n.tick,n.key]),[[15,3],[25,8],[50,4]]);assert.equal(notes[0].tick,10);});
 test('group collisions reject the whole move without deleting other notes',()=>{assert.throws(()=>moveGroup(notes,ids,30,0),/chồng/);assert.equal(notes.length,3);assert.equal(notes[1].tick,20);});

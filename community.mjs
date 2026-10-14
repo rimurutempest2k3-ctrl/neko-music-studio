@@ -1,0 +1,35 @@
+import {currentUser,sendCode,verifyCode,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs';
+import {importSong,exportSong} from './music.mjs';
+const $ = id=>document.getElementById(id);
+export function setupCommunity({getCurrentSong,loadSong,toast}) {
+ let page=0, rows=[], pending=false;
+ const status = message=>{$('communityStatus').textContent=message;};
+ function account() { const user=currentUser(); $('accountLabel').textContent=user?'Đã đăng nhập':'Đăng nhập'; $('loginPanel').hidden=!!user; $('logoutBtn').hidden=!user; $('sharePanel').hidden=!user; }
+ function node(tag,text,className) { const el=document.createElement(tag); el.textContent=text; if(className) el.className=className; return el; }
+ async function guarded(fn) { if(pending) return; pending=true; try {await fn();} catch(e) {status(e.message); toast(e.message);} finally {pending=false; account();} }
+ function render() {
+  $('communityList').replaceChildren();
+  const query=$('communitySearch').value.trim().toLocaleLowerCase('vi');
+  for(const row of rows.filter(r=>(r.title+' '+r.author).toLocaleLowerCase('vi').includes(query))) {
+   const card=node('article','','community-song'); const details=node('div',''); details.append(node('h3',row.title),node('p',`${row.author} · ${row.note_count} nốt · ${Math.floor(row.duration_ms/60000)}:${String(Math.floor(row.duration_ms/1000)%60).padStart(2,'0')}`));
+   const actions=node('div','','community-actions');
+   const download=node('button','↓ Tải bài'); download.onclick=()=>guarded(async()=>{const song=exportSong(importSong(await getSong(row.id))); const url=URL.createObjectURL(new Blob([JSON.stringify(song,null,2)],{type:'application/json'})); const a=node('a',''); a.href=url; a.download=row.title.replace(/[<>:"/\\|?*]/g,'_')+'.nekomusic'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),10000);});
+   const open=node('button','Mở trong Studio'); open.onclick=()=>guarded(async()=>{await loadSong(await getSong(row.id));}); actions.append(open,download);
+   if(row.owner_id===currentUser()?.id) {const remove=node('button','Gỡ bài','danger'); remove.onclick=()=>guarded(async()=>{if(!confirm('Gỡ bài này khỏi thư viện công khai?')) return; await hideSong(row.id); rows=rows.filter(r=>r.id!==row.id); render(); status('Đã gỡ bài.');}); actions.append(remove);}
+   card.append(details,actions); $('communityList').append(card);
+  }
+  if(!$('communityList').children.length) $('communityList').append(node('p',query?'Không tìm thấy trong các bài đã tải.':'Thư viện chưa có bài. Hãy chia sẻ giai điệu đầu tiên.','hint'));
+ }
+ async function refresh() { page=0; status('Đang tải thư viện…'); rows=await listSongs(); render(); $('moreSongs').disabled=rows.length<24; status(`${rows.length} bài đã tải`); }
+ $('communityBtn').onclick=()=>{ $('communityDialog').showModal(); account(); guarded(refresh); };
+ $('closeCommunity').onclick=()=>$('communityDialog').close();
+ $('communitySearch').oninput=render;
+ $('refreshCommunity').onclick=()=>guarded(refresh);
+ $('moreSongs').onclick=()=>guarded(async()=>{const next=await listSongs(page+1); page++; rows.push(...next); render(); $('moreSongs').disabled=next.length<24; status(`${rows.length} bài đã tải`);});
+ $('sendCode').onclick=()=>guarded(async()=>{const input=$('loginEmail'); if(!input.reportValidity())return; await sendCode(input.value.trim()); $('codeStep').hidden=false; status('Đã gửi mã đăng nhập. Kiểm tra email và thư rác.');});
+ $('verifyCode').onclick=()=>guarded(async()=>{if(!$('loginCode').value.trim())throw new Error('Nhập mã trong email.'); await verifyCode($('loginEmail').value.trim(),$('loginCode').value.trim()); $('loginCode').value=''; account(); render(); status('Đăng nhập thành công.');});
+ $('logoutBtn').onclick=()=>guarded(async()=>{await signOut(); account(); render(); status('Đã đăng xuất.');});
+ $('shareSong').onclick=()=>guarded(async()=>{if(!$('authorName').reportValidity())return; await publishSong(getCurrentSong(),$('authorName').value.trim()); await refresh(); status('Đã chia sẻ bản nhạc của bạn!');});
+ account();
+ consumeAuthReturn().then(()=>account()).catch(e=>toast(e.message));
+}

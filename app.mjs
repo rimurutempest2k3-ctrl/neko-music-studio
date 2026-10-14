@@ -1,7 +1,6 @@
-import {moveNote,playbackSlice} from './editing.mjs?v=20261014-tabs2';
-import {drafts,setupLibrary} from './library.mjs?v=20261014-tabs2';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-tabs2';
-import { setupCommunity } from './community.mjs?v=20261014-tabs2';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261014-community';
+import {drafts,setupLibrary} from './library.mjs?v=20261014-community';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-community';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
@@ -29,9 +28,9 @@ function save() {
       ...project.controls.map(c => ({tick:c.tick,type:'STATE_CHANGE',control:c.control}))
     ].sort((a,b) => a.tick - b.tick) };
     drafts.put(draftId,draftSong);
-    localStorage.setItem(storageKey, JSON.stringify({ song: draftSong, draftId, cursor, viewTicks, step, duration, zoom })); $('saveStatus').textContent = '● Đã lưu trên thiết bị';
+    localStorage.setItem(storageKey, JSON.stringify({ song: draftSong, draftId, cursor, viewTicks, step, duration, zoom })); $('saveStatus').textContent = '● Đã lưu trên thiết bị'; return true;
   }
-  catch { $('saveStatus').textContent = '○ Chưa lưu · hãy xuất file'; }
+  catch { $('saveStatus').textContent = '○ Chưa lưu · hãy xuất file'; return false; }
 }
 function load() {
   try { const data = JSON.parse(localStorage.getItem(storageKey)); if (!data) { project = demo(); return; }
@@ -407,6 +406,11 @@ new ResizeObserver(() => {
   const oldTicks = viewTicks; ensureView();
   if (oldTicks !== viewTicks) { renderGrid(); updatePlayhead(); }
 }).observe($('rollScroll'));
-setupCommunity({getCurrentSong:()=>exportSong(project),loadSong:async(song)=>{const value=importSong(song); if(!confirm('Mở bài cộng đồng và thay bài đang soạn? Bạn có thể hoàn tác.'))return; replaceProject(value); document.getElementById('communityDialog').close(); toast('Đã mở bài cộng đồng.');},toast});
 
 setupLibrary({openDraft:row=>replaceProject(importSong(row.song),row.id),openPublished:async song=>replaceProject(importSong(song)),newSong:()=>replaceProject(blank()),onDeleteDraft:id=>{if(id===draftId)replaceProject(blank());},stop:()=>stopPlayback(false),toast});
+
+$('communityBtn').onclick=()=>{stopPlayback(false);if(save())location.assign('community.html');else toast('Chưa lưu được bài. Hãy xuất file trước khi chuyển trang.');};
+if(new URLSearchParams(location.hash.slice(1)).has('access_token')||new URLSearchParams(location.hash.slice(1)).has('error_description'))location.replace('community.html'+location.hash);
+if(new URLSearchParams(location.search).get('open')==='community'){
+ try{const raw=sessionStorage.getItem('neko-community-open-song');if(raw){const song=importSong(JSON.parse(raw));replaceProject(song);sessionStorage.removeItem('neko-community-open-song');toast('Đã mở bài cộng đồng thành bản nháp.');}history.replaceState(null,'',location.pathname);}catch(e){toast(e.message);}
+}

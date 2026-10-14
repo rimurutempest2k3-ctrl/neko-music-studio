@@ -20,17 +20,17 @@ async function accessToken() {
  }
  return session.access_token;
 }
-export async function sendCode(email) { await request('/auth/v1/otp?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email,create_user:true}}); }
+export async function sendCode(email) { await request('/auth/v1/otp?redirect_to='+encodeURIComponent(location.origin+location.pathname.replace(/[^/]*$/,"")),{method:'POST',body:{email,create_user:true}}); }
 export async function signInPassword(email,password) {
  const data=await request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});
  saveSession({...data,expires_at:Date.now()/1000+data.expires_in}); return currentUser();
 }
 export async function signUpPassword(email,password) {
- const data=await request('/auth/v1/signup?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email,password}});
+ const data=await request('/auth/v1/signup?redirect_to='+encodeURIComponent(location.origin+location.pathname.replace(/[^/]*$/,"")),{method:'POST',body:{email,password}});
  if(data.access_token) saveSession({...data,expires_at:Date.now()/1000+data.expires_in});
  return !!data.access_token;
 }
-export async function resetPassword(email) { return request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email}}); }
+export async function resetPassword(email) { return request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname.replace(/[^/]*$/,"")),{method:'POST',body:{email}}); }
 export async function updatePassword(password) { const user=await request('/auth/v1/user',{method:'PUT',token:await accessToken(),body:{password}}); saveSession({...session,user}); }
 export async function listMySongs(page=0) {
  const token=await accessToken(); const user=currentUser();

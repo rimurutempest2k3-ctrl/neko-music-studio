@@ -14,6 +14,8 @@ allowlist cần trỏ đến URL GitHub Pages. Email xác nhận và khôi phụ
 cho người dùng ngoài nhóm quản trị nếu máy chủ bật xác nhận email.
 
 - Ba tab riêng: Trình soạn nhạc, Nhạc nháp, Nhạc đã đăng.
+- Thư viện cộng đồng ở trang con `community.html`, có đường dẫn riêng. Chuyển từ
+  Studio sẽ lưu bài trước; mở bài cộng đồng tạo nháp mới và giữ bài cũ trong nháp.
 - Nháp tự lưu trên trình duyệt này; bài đang mở trước đây được chuyển vào danh sách.
   Mở bài khác không ghi đè nháp cũ. Nháp không đồng bộ qua tài khoản hoặc thiết bị.
 - Nhạc đã đăng lọc theo tài khoản ở máy chủ, hỗ trợ phân trang và gỡ bài.

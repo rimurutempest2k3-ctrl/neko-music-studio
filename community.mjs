@@ -1,5 +1,5 @@
-import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs?v=20261014-tabs2';
-import {importSong,exportSong} from './music.mjs?v=20261014-tabs2';
+import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs?v=20261014-community';
+import {importSong,exportSong} from './music.mjs?v=20261014-community';
 const $ = id=>document.getElementById(id);
 export function setupCommunity({getCurrentSong,loadSong,toast}) {
  let page=0, rows=[], pending=false;
@@ -21,8 +21,7 @@ export function setupCommunity({getCurrentSong,loadSong,toast}) {
   if(!$('communityList').children.length) $('communityList').append(node('p',query?'Không tìm thấy trong các bài đã tải.':'Thư viện chưa có bài. Hãy chia sẻ giai điệu đầu tiên.','hint'));
  }
  async function refresh() { page=0; status('Đang tải thư viện…'); rows=await listSongs(); render(); $('moreSongs').disabled=rows.length<24; status(`${rows.length} bài đã tải`); }
- $('communityBtn').onclick=()=>{ $('communityDialog').showModal(); account(); guarded(refresh); };
- $('closeCommunity').onclick=()=>$('communityDialog').close();
+
  $('communitySearch').oninput=render;
  $('refreshCommunity').onclick=()=>guarded(refresh);
  $('moreSongs').onclick=()=>guarded(async()=>{const next=await listSongs(page+1); page++; rows.push(...next); render(); $('moreSongs').disabled=next.length<24; status(`${rows.length} bài đã tải`);});
@@ -36,5 +35,5 @@ export function setupCommunity({getCurrentSong,loadSong,toast}) {
  $('logoutBtn').onclick=()=>guarded(async()=>{await signOut(); accountChanged(); status('Đã đăng xuất.');});
  $('shareSong').onclick=()=>guarded(async()=>{if(!$('authorName').reportValidity())return; await publishSong(getCurrentSong(),$('authorName').value.trim()); await refresh(); window.dispatchEvent(new Event('neko-published')); status('Đã chia sẻ bản nhạc của bạn!');});
  account();
- consumeAuthReturn().then(type=>{accountChanged();if(type==='recovery'){$('communityDialog').showModal();document.querySelector('.community-account').open=true;$('newPassword').focus();status('Nhập mật khẩu mới để hoàn tất.');}}).catch(e=>toast(e.message));
+ consumeAuthReturn().then(type=>{accountChanged();guarded(refresh);if(type==='recovery'){document.querySelector('.community-account').open=true;$('newPassword').focus();status('Nhập mật khẩu mới để hoàn tất.');}}).catch(e=>toast(e.message));
 }

@@ -21,6 +21,22 @@ async function accessToken() {
  return session.access_token;
 }
 export async function sendCode(email) { await request('/auth/v1/otp?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email,create_user:true}}); }
+export async function signInPassword(email,password) {
+ const data=await request('/auth/v1/token?grant_type=password',{method:'POST',body:{email,password}});
+ saveSession({...data,expires_at:Date.now()/1000+data.expires_in}); return currentUser();
+}
+export async function signUpPassword(email,password) {
+ const data=await request('/auth/v1/signup?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email,password}});
+ if(data.access_token) saveSession({...data,expires_at:Date.now()/1000+data.expires_in});
+ return !!data.access_token;
+}
+export async function resetPassword(email) { return request('/auth/v1/recover?redirect_to='+encodeURIComponent(location.origin+location.pathname),{method:'POST',body:{email}}); }
+export async function updatePassword(password) { const user=await request('/auth/v1/user',{method:'PUT',token:await accessToken(),body:{password}}); saveSession({...session,user}); }
+export async function listMySongs(page=0) {
+ const token=await accessToken(); const user=currentUser();
+ if(!user || !/^[0-9a-f-]{36}$/i.test(user.id)) throw new Error('Hãy đăng nhập để xem nhạc đã đăng.');
+ return request(`/rest/v1/community_songs?select=id,owner_id,title,author,note_count,duration_ms,created_at&owner_id=eq.${user.id}&deleted=eq.false&order=created_at.desc,id.desc&limit=24&offset=${page*24}`,{token});
+}
 export async function consumeAuthReturn() {
  const params=new URLSearchParams(location.hash.slice(1));
  if(!params.has('access_token') && !params.has('error_description'))return;
@@ -29,6 +45,7 @@ export async function consumeAuthReturn() {
  const token=params.get('access_token');
  const user=await request('/auth/v1/user',{token});
  saveSession({access_token:token,refresh_token:params.get('refresh_token'),expires_at:Date.now()/1000+Number(params.get('expires_in')||3600),user});
+ return params.get('type');
 }
 export async function verifyCode(email,token) { const data = await request('/auth/v1/verify',{method:'POST',body:{email,token,type:'email'}}); saveSession({...data,expires_at:Date.now()/1000+data.expires_in}); return currentUser(); }
 export async function signOut() { try { if(session) await request('/auth/v1/logout',{method:'POST',token:await accessToken()}); } finally { saveSession(null); } }

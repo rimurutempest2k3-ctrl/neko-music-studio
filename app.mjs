@@ -1,3 +1,5 @@
+import {moveNote,playbackSlice} from './editing.mjs';
+import {drafts,setupLibrary} from './library.mjs';
 import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs';
 import { setupCommunity } from './community.mjs';
 const $ = id => document.getElementById(id);
@@ -5,8 +7,10 @@ const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
 const storageKey = 'neko-music-studio-v1' + (testMode === 'interaction' ? '-interaction-test' : testMode === 'playback' ? '-playback-test' : '');
 const PAGE_TICKS = 65520;
+let draftId=crypto.randomUUID();
 let project = blank(), cursor = 0, selected = null, viewTicks = 160, step = 5, duration = 5, zoom = 6;
 let undo = [], redo = [], toastTimer, playing = false, animation, audio, activeVoices = [], startTime = 0, endTime = 0;
+let playbackOffset=0;
 let playbackEvents = [], playbackIndex = 0, lastFrameTime = 0, highlightedNote = null, highlightedKey = null;
 const noteElements = new Map();
 function blank() { return { title: 'Giai điệu đầu tiên', tps: 20, notes: [], controls: [], nextId: 1 }; }
@@ -15,8 +19,8 @@ function demo() {
   return { title: 'Một chút bình yên', tps: 20, notes: result.notes, controls: [], nextId: result.nextId };
 }
 function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 4000); }
-function snapshot() { return JSON.stringify({ project, cursor, viewTicks }); }
-function restore(value) { const data = JSON.parse(value); project = data.project; cursor = data.cursor; viewTicks = data.viewTicks; selected = null; render(); save(); }
+function snapshot() { return JSON.stringify({ project, cursor, viewTicks, draftId }); }
+function restore(value) { const data = JSON.parse(value); project = data.project; draftId=data.draftId || crypto.randomUUID(); cursor = data.cursor; viewTicks = data.viewTicks; selected = null; render(); save(); }
 function commit(action) { stopPlayback(false); const before = snapshot(); action(); if (snapshot() !== before) { undo.push(before); undo = undo.slice(-100); redo = []; } render(); save(); }
 function save() {
   try {
@@ -24,13 +28,14 @@ function save() {
       ...project.notes.map(n => ({tick:n.tick,type:'NOTE',keys:[n.key],duration_ticks:n.duration})),
       ...project.controls.map(c => ({tick:c.tick,type:'STATE_CHANGE',control:c.control}))
     ].sort((a,b) => a.tick - b.tick) };
-    localStorage.setItem(storageKey, JSON.stringify({ song: draftSong, cursor, viewTicks, step, duration, zoom })); $('saveStatus').textContent = '● Đã lưu trên thiết bị';
+    drafts.put(draftId,draftSong);
+    localStorage.setItem(storageKey, JSON.stringify({ song: draftSong, draftId, cursor, viewTicks, step, duration, zoom })); $('saveStatus').textContent = '● Đã lưu trên thiết bị';
   }
   catch { $('saveStatus').textContent = '○ Chưa lưu · hãy xuất file'; }
 }
 function load() {
   try { const data = JSON.parse(localStorage.getItem(storageKey)); if (!data) { project = demo(); return; }
-    project = importSong(data.song); cursor = integer(data.cursor ?? 0, 0, MAX_TICK, 'Con trỏ'); viewTicks = Math.min(MAX_TICK, Math.max(160, Number(data.viewTicks) || 160));
+    draftId=data.draftId || crypto.randomUUID(); project = importSong(data.song); cursor = integer(data.cursor ?? 0, 0, MAX_TICK, 'Con trỏ'); viewTicks = Math.min(MAX_TICK, Math.max(160, Number(data.viewTicks) || 160));
     if ([1,2,5,10,20].includes(data.step)) step = data.step;
     if ([1,5,10,20,40].includes(data.duration)) duration = data.duration;
     if ([4,6,10].includes(data.zoom)) zoom = data.zoom;
@@ -80,7 +85,8 @@ function renderGrid() {
     el.style.top = `${(8 - note.key) * 43 + 7}px`;
     el.style.width = `${Math.max(8, (Math.min(note.tick + note.duration, pageStart + visibleTicks) - Math.max(note.tick, pageStart)) * zoom - 4)}px`;
     el.setAttribute('aria-label', `Phím ${note.key}, tick ${note.tick}, dài ${note.duration} tick`); el.title = el.getAttribute('aria-label');
-    el.onclick = e => { e.stopPropagation(); choose({ kind: 'note', id: note.id }, note.tick); audition(note.key); };
+    attachMoveHandle(el,note,pageStart);
+    el.onclick = e => { e.stopPropagation(); if(el.dataset.moved==='true'){el.dataset.moved='false';return;} choose({ kind: 'note', id: note.id }, note.tick); audition(note.key); };
     el.oncontextmenu = e => { e.preventDefault(); e.stopPropagation(); commit(() => { project.notes = project.notes.filter(n => n.id !== note.id); selected = null; }); };
     if (note.tick >= pageStart && note.tick + note.duration <= pageStart + visibleTicks) attachResizeHandle(el,note,pageStart,visibleTicks);
     $('noteGrid').append(el);
@@ -95,6 +101,16 @@ function renderGrid() {
     $('controlLane').append(el);
   }
   $('rollSummary').textContent = `${project.notes.length} nốt · ${Math.ceil(viewTicks / 40)} ô nhịp${pageStart ? ` · trang từ ô ${pageStart / 40 + 1}` : ''}`;
+}
+function attachMoveHandle(el,note,pageStart) {
+ let drag=null;
+ el.style.touchAction='none';el.title+=' · Kéo để di chuyển';
+ el.onpointerdown=e=>{if(e.button!==0||e.target.closest('.note-resize'))return;e.preventDefault();e.stopPropagation();stopPlayback(false);drag={id:e.pointerId,x:e.clientX,y:e.clientY,currentX:e.clientX,scroll:$('rollScroll').scrollLeft,tick:note.tick,key:note.key,moved:false};el.setPointerCapture(e.pointerId);beginEdgeScroll(()=>drag?.currentX,update);};
+ function update(x){if(!drag)return;const delta=x-drag.x+$('rollScroll').scrollLeft-drag.scroll;drag.tick=Math.max(pageStart,Math.min(pageStart+PAGE_TICKS-1,MAX_TICK-1,note.tick+Math.round(delta/(zoom*step))*step));el.style.left=((drag.tick-pageStart)*zoom+2)+'px';el.style.top=((8-drag.key)*43+7)+'px';expandCanvasToTick(drag.tick+note.duration+tailTicks());}
+ el.onpointermove=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();drag.currentX=e.clientX;drag.key=Math.max(1,Math.min(8,note.key-Math.round((e.clientY-drag.y)/43)));drag.moved ||= Math.abs(e.clientX-drag.x)>4||Math.abs(e.clientY-drag.y)>4;update(e.clientX);};
+ el.onpointerup=e=>{if(!drag||e.pointerId!==drag.id)return;e.preventDefault();e.stopPropagation();const value=drag;drag=null;endEdgeScroll();if(el.hasPointerCapture(e.pointerId))el.releasePointerCapture(e.pointerId);if(value.moved){el.dataset.moved='true';commit(()=>{project.notes=moveNote(project.notes,note,value.tick,value.key);cursor=value.tick;selected={kind:'note',id:note.id};});} };
+ el.onpointercancel=()=>{drag=null;endEdgeScroll();render();};
+ el.onkeydown=e=>{if(e.target!==el||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;e.preventDefault();e.stopPropagation();commit(()=>{const tick=note.tick+(e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0),key=note.key+(e.key==='ArrowUp'?1:e.key==='ArrowDown'?-1:0);project.notes=moveNote(project.notes,note,tick,key);cursor=Math.max(0,tick);selected={kind:'note',id:note.id};});};
 }
 function attachResizeHandle(el,note,pageStart,visibleTicks) {
   const handle = make('span','note-resize','⋮');
@@ -212,6 +228,7 @@ function undoAction() { if (!undo.length) return; stopPlayback(false); redo.push
 function redoAction() { if (!redo.length) return; stopPlayback(false); undo.push(snapshot()); restore(redo.pop()); }
 $('undoBtn').onclick = undoAction; $('redoBtn').onclick = redoAction;
 document.onkeydown = e => {
+  if(document.body.classList.contains('library-mode'))return;
   if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName) || document.querySelector('dialog[open]')) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redoAction() : undoAction(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') { e.preventDefault(); redoAction(); }
@@ -227,7 +244,7 @@ function confirmReplace(message, callback) {
 }
 $('cancelConfirm').onclick = () => $('confirmDialog').close();
 $('keepHighestBtn').onclick = () => confirmReplace('Giữ phím có số lớn nhất ở mỗi cột và bỏ các nốt còn lại. Nốt dài sẽ được thả trước nốt kế tiếp. Bạn có thể hoàn tác để khôi phục bài cũ.', () => { commit(() => { project.notes = keepHighest(project.notes); selected = null; }); toast('Đã chuyển bài sang một nốt tại mỗi thời điểm.'); });
-function replaceProject(value) { commit(() => { project = value; cursor = 0; selected = null; viewTicks = 160; }); $('rollScroll').scrollLeft = 0; }
+function replaceProject(value,id=crypto.randomUUID()) { save(); commit(() => { draftId=id; project = value; cursor = 0; selected = null; viewTicks = 160; }); $('rollScroll').scrollLeft = 0; }
 $('newBtn').onclick = () => confirmReplace('Bài hiện tại sẽ được thay bằng bản trống. Hãy xuất file nếu muốn giữ một bản riêng. Bạn vẫn có thể hoàn tác.', () => replaceProject(blank()));
 $('demoBtn').onclick = () => confirmReplace('Mở giai điệu mẫu để thử trình soạn. Bài hiện tại có thể khôi phục bằng Hoàn tác.', () => replaceProject(demo()));
 $('importBtn').onclick = () => $('fileInput').click();
@@ -262,33 +279,24 @@ function voice(key, at, seconds, pitch = 0, semitone = false) {
 async function audition(key) { try { stopPlayback(false); const ctx = getAudio(); await ctx.resume(); voice(key, ctx.currentTime, .22); const el = document.querySelector(`.piano-key[data-key="${key}"]`); el?.classList.add('sounding'); setTimeout(() => el?.classList.remove('sounding'), 180); } catch(e) { toast(e.message); } }
 async function play() {
   if (!project.notes.length) { toast('Thêm nốt nhạc để nghe thử.'); return; }
-  try { const ctx = getAudio(); await ctx.resume(); stopPlayback(false); const timeline = exportSong(project).timeline; let pitch = 0, semitone = false;
-    startTime = ctx.currentTime + .1; endTime = songEnd(project) / project.tps;
-    playbackEvents = []; playbackIndex = 0; lastFrameTime = ctx.currentTime;
-    const ticks = [...new Set(timeline.map(event => event.tick))];
-    const nextTick = new Map(ticks.slice(0,-1).map((tick,index) => [tick,ticks[index+1]]));
-    for (const event of timeline) {
-      if (event.type === 'STATE_CHANGE') { if (event.control === 'SEMITONE') semitone = !semitone; else pitch = { PITCH_UP: 1, NATURAL_PITCH: 0, PITCH_DOWN: -1 }[event.control]; }
-      else for (const key of event.keys) {
-        const next = nextTick.get(event.tick);
-        const held = next === undefined ? event.duration_ticks : Math.min(event.duration_ticks, next - event.tick);
-        const seconds = Math.max(.005,held / project.tps - .06);
-        voice(key, startTime + event.tick / project.tps, seconds, pitch, semitone);
-        playbackEvents.push({tick:event.tick,key,durationTicks:Math.min(seconds,8) * project.tps});
-      }
-    }
-    cursor = 0; selected = null; playing = true; $('playBtn').textContent = '■'; $('playBtn').setAttribute('aria-label','Dừng nghe thử'); render(); $('rollScroll').scrollLeft = 0; animate();
+  const fromTick=$('playMode').value==='start'?0:cursor;
+  if(fromTick>=songEnd(project)){toast('Con trỏ đã ở cuối bài. Chọn vị trí khác hoặc Phát từ đầu.');return;}
+  try { const ctx=getAudio();await ctx.resume();stopPlayback(false);const timeline=exportSong(project).timeline;
+    playbackOffset=fromTick/project.tps;startTime=ctx.currentTime+.1-playbackOffset;endTime=songEnd(project)/project.tps;
+    playbackEvents=[];playbackIndex=0;lastFrameTime=ctx.currentTime;
+    for(const event of playbackSlice(timeline,fromTick))for(const key of event.keys){const seconds=Math.max(.005,event.duration_ticks/project.tps-.06);voice(key,startTime+event.tick/project.tps,seconds,event.pitch,event.semitone);playbackEvents.push({tick:event.tick,key,durationTicks:Math.min(seconds,8)*project.tps});}
+    cursor=fromTick;selected=null;playing=true;$('playBtn').textContent='■';$('playBtn').setAttribute('aria-label','Dừng nghe thử');render();scrollToCursor();animate();
   } catch(e) { stopPlayback(false); toast(e.message); }
 }
 function animate() {
   if (!playing) return;
-  const seconds = Math.max(0,audio.currentTime - startTime), frame = playbackFrame(seconds,project.tps);
+  const seconds = Math.max(playbackOffset,audio.currentTime - startTime), frame = playbackFrame(seconds,project.tps);
   const deltaSeconds = Math.min(.1,Math.max(0,audio.currentTime - lastFrameTime)); lastFrameTime = audio.currentTime;
   if (Math.floor(frame.cursor / PAGE_TICKS) !== Math.floor(cursor / PAGE_TICKS)) { cursor = frame.cursor; renderGrid(); } else cursor = frame.cursor;
   updatePlayhead(frame.visualTick);
   const timeLabel = formatTime(seconds); if ($('playTime').textContent !== timeLabel) $('playTime').textContent = timeLabel;
   const active = activePlaybackEvent(playbackEvents,playbackIndex,frame.visualTick); playbackIndex = active.index;
-  highlightPlaybackNote(audio.currentTime >= startTime ? active.event : null);
+  highlightPlaybackNote(audio.currentTime >= startTime + playbackOffset ? active.event : null);
   if (seconds >= endTime + .1) { stopPlayback(false); toast('Đã nghe hết bài.'); return; }
   const scroll = $('rollScroll'), tickPixels = (frame.visualTick - Number($('canvas').dataset.start)) * zoom;
   const target = Math.min(scroll.scrollWidth - scroll.clientWidth,followScrollTarget(tickPixels,scroll.clientWidth));
@@ -393,10 +401,12 @@ $('playhead').onkeydown = event => {
 function scrollToCursor() { const scroll = $('rollScroll'), x = (cursor - Number($('canvas').dataset.start)) * zoom + 68; if (x > scroll.scrollLeft + scroll.clientWidth - 70) scroll.scrollLeft = x - scroll.clientWidth + 100; else if (x < scroll.scrollLeft + 68) scroll.scrollLeft = Math.max(0, x - 68); }
 $('playBtn').onclick = () => playing ? stopPlayback(false) : play(); $('stopBtn').onclick = () => stopPlayback(true);
 window.addEventListener('pagehide', () => { endEdgeScroll(); stopPlayback(false); save(); });
-load(); render();
+load(); render(); save();
 new ResizeObserver(() => {
   if (cursorDrag || document.querySelector('.note.resizing')) return;
   const oldTicks = viewTicks; ensureView();
   if (oldTicks !== viewTicks) { renderGrid(); updatePlayhead(); }
 }).observe($('rollScroll'));
 setupCommunity({getCurrentSong:()=>exportSong(project),loadSong:async(song)=>{const value=importSong(song); if(!confirm('Mở bài cộng đồng và thay bài đang soạn? Bạn có thể hoàn tác.'))return; replaceProject(value); document.getElementById('communityDialog').close(); toast('Đã mở bài cộng đồng.');},toast});
+
+setupLibrary({openDraft:row=>replaceProject(importSong(row.song),row.id),openPublished:async song=>replaceProject(importSong(song)),newSong:()=>replaceProject(blank()),onDeleteDraft:id=>{if(id===draftId)replaceProject(blank());},stop:()=>stopPlayback(false),toast});

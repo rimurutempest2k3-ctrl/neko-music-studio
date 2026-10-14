@@ -1,5 +1,5 @@
-import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs';
-import {importSong,exportSong} from './music.mjs';
+import {currentUser,signInPassword,signUpPassword,resetPassword,updatePassword,signOut,listSongs,getSong,publishSong,hideSong,consumeAuthReturn} from './cloud.mjs?v=20261014-tabs2';
+import {importSong,exportSong} from './music.mjs?v=20261014-tabs2';
 const $ = id=>document.getElementById(id);
 export function setupCommunity({getCurrentSong,loadSong,toast}) {
  let page=0, rows=[], pending=false;

@@ -1,4 +1,4 @@
-import {MAX_TICK,replaceNotes} from './music.mjs';
+import {MAX_TICK,replaceNotes} from './music.mjs?v=20261014-tabs2';
 export function moveNote(notes,note,tick,key) {
  tick=Math.max(0,Math.min(MAX_TICK-1,Math.round(tick)));key=Math.max(1,Math.min(8,Math.round(key)));
  return replaceNotes(notes.filter(n=>n.id!==note.id),[{...note,tick,key,duration:Math.min(note.duration,MAX_TICK-tick)}]);

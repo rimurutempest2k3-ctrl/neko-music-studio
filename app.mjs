@@ -1,7 +1,7 @@
-import {moveNote,playbackSlice} from './editing.mjs';
-import {drafts,setupLibrary} from './library.mjs';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs';
-import { setupCommunity } from './community.mjs';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261014-tabs2';
+import {drafts,setupLibrary} from './library.mjs?v=20261014-tabs2';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-tabs2';
+import { setupCommunity } from './community.mjs?v=20261014-tabs2';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');

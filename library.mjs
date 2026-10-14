@@ -1,5 +1,5 @@
-import {createDraftStore} from './drafts.mjs';
-import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs';
+import {createDraftStore} from './drafts.mjs?v=20261014-tabs2';
+import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261014-tabs2';
 const $=id=>document.getElementById(id);
 export const drafts=createDraftStore(localStorage);
 export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDeleteDraft}) {

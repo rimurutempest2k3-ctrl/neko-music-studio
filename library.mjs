@@ -1,5 +1,6 @@
 import {createDraftStore} from './drafts.mjs?v=20261020-mint-account';
 import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261020-mint-account';
+import {appendPublishedTime} from './published-time.mjs?v=20261020-published-time';
 const $=id=>document.getElementById(id);
 export const drafts=createDraftStore(localStorage);
 export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDeleteDraft}) {
@@ -14,7 +15,7 @@ export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDelet
  }
  function renderPublished() {
   $('libraryList').replaceChildren();
-  for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.title),node('p',`${row.author} · ${row.note_count} nốt`));const actions=node('div','');actions.className='community-actions';const open=node('button','Mở thành bản nháp');open.onclick=async()=>{try{await openPublished(await getSong(row.id));show('editor');}catch(e){toast(e.message);}};const remove=node('button','Gỡ bài');remove.className='danger';remove.onclick=async()=>{if(busy||!confirm('Gỡ bài này khỏi thư viện công khai?'))return;busy=true;try{await hideSong(row.id);rows=rows.filter(r=>r.id!==row.id);renderPublished();}catch(e){toast(e.message);}finally{busy=false;}};actions.append(open,remove);card.append(detail,actions);$('libraryList').append(card);}
+  for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.title),node('p',`${row.author} · ${row.note_count} nốt`));appendPublishedTime(detail,row.created_at);const actions=node('div','');actions.className='community-actions';const open=node('button','Mở thành bản nháp');open.onclick=async()=>{try{await openPublished(await getSong(row.id));show('editor');}catch(e){toast(e.message);}};const remove=node('button','Gỡ bài');remove.className='danger';remove.onclick=async()=>{if(busy||!confirm('Gỡ bài này khỏi thư viện công khai?'))return;busy=true;try{await hideSong(row.id);rows=rows.filter(r=>r.id!==row.id);renderPublished();}catch(e){toast(e.message);}finally{busy=false;}};actions.append(open,remove);card.append(detail,actions);$('libraryList').append(card);}
   $('libraryStatus').textContent=rows.length?`${rows.length} bài đã đăng`:'Bạn chưa đăng bài nào.';
  }
  async function refresh(more=false) {

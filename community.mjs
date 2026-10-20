@@ -1,5 +1,6 @@
 import {currentUser,accountName,listSongs,getSong,publishSong,hideSong} from './cloud.mjs?v=20261020-mint-account';
 import {importSong,exportSong} from './music.mjs?v=20261020-mint-account';
+import {appendPublishedTime} from './published-time.mjs?v=20261020-published-time';
 const $ = id=>document.getElementById(id);
 export function setupCommunity({getCurrentSong,loadSong,toast}) {
  let page=0, rows=[], pending=false;
@@ -13,6 +14,7 @@ export function setupCommunity({getCurrentSong,loadSong,toast}) {
   const query=$('communitySearch').value.trim().toLocaleLowerCase('vi');
   for(const row of rows.filter(r=>(r.title+' '+r.author).toLocaleLowerCase('vi').includes(query))) {
    const card=node('article','','community-song'); const details=node('div',''); details.append(node('h3',row.title),node('p',`Đăng bởi: ${row.author} · ${row.note_count} nốt · ${Math.floor(row.duration_ms/60000)}:${String(Math.floor(row.duration_ms/1000)%60).padStart(2,'0')}`));
+   appendPublishedTime(details,row.created_at);
    const actions=node('div','','community-actions');
    const download=node('button','↓ Tải bài'); download.onclick=()=>guarded(async()=>{const song=exportSong(importSong(await getSong(row.id))); const url=URL.createObjectURL(new Blob([JSON.stringify(song,null,2)],{type:'application/json'})); const a=node('a',''); a.href=url; a.download=row.title.replace(/[<>:"/\\|?*]/g,'_')+'.nekomusic'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),10000);});
    const open=node('button','Mở trong Studio'); open.onclick=()=>guarded(async()=>{await loadSong(await getSong(row.id));}); actions.append(open,download);

@@ -1,7 +1,7 @@
 import {setupAccount} from './account.mjs?v=20261020-mint-account';
 import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261020-mint-account';
 import {moveNote,playbackSlice} from './editing.mjs?v=20261020-mint-account';
-import {drafts,setupLibrary} from './library.mjs?v=20261020-mint-account';
+import {drafts,setupLibrary} from './library.mjs?v=20261020-published-time';
 import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261020-mint-account';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];

@@ -1,5 +1,5 @@
 import {setupAccount,openAccount} from './account.mjs?v=20261020-mint-account';
-import {setupCommunity} from './community.mjs?v=20261020-mint-account';
+import {setupCommunity} from './community.mjs?v=20261020-published-time';
 import {importSong,exportSong} from './music.mjs?v=20261020-mint-account';
 let toastTimer;
 function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('visible'),4000);}

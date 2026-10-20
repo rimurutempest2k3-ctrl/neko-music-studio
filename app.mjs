@@ -12,6 +12,7 @@ let draftId=crypto.randomUUID();
 let project = blank(), cursor = 0, selected = null, viewTicks = 160, step = 5, duration = 5, zoom = 6;
 let undo = [], redo = [], toastTimer, playing = false, animation, audio, activeVoices = [], startTime = 0, endTime = 0;
 let playbackOffset=0;
+let heldKey=null;
 let playbackEvents = [], playbackIndex = 0, lastFrameTime = 0, highlightedNote = null, highlightedKey = null;
 const noteElements = new Map();
 let groupIds=new Set(),multiMode=false,noteClipboard=[];
@@ -204,8 +205,41 @@ function addFromKeyboard(key) {
   commit(() => { const note = { id: project.nextId++, tick: cursor, key, duration }; project.notes = replaceNotes(project.notes,[note]); selected = { kind: 'note', id: note.id }; cursor = Math.min(MAX_TICK - 1, cursor + step); }); audition(key); scrollToCursor();
 }
 for (let key = 1; key <= 8; key++) {
-  const el = make('button', 'piano-key', key === 8 ? 'i' : key); el.append(make('small', '', names[key - 1])); el.dataset.key = key; el.setAttribute('aria-label', `Thêm phím ${key}`); el.onclick = () => addFromKeyboard(key); $('keyboard').append(el);
+  const el = make('button', 'piano-key', key === 8 ? 'i' : key); el.append(make('small', '', names[key - 1])); el.dataset.key = key; el.setAttribute('aria-label', `Thêm phím ${key}`);
+  el.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();el.focus({preventScroll:true});el.setPointerCapture(e.pointerId);beginHeldKey(key,`pointer:${e.pointerId}`);};
+  el.onpointerup=e=>{if(heldKey?.source===`pointer:${e.pointerId}`)finishHeldKey(true);if(el.hasPointerCapture(e.pointerId))el.releasePointerCapture(e.pointerId);};
+  el.onpointercancel=e=>{if(heldKey?.source===`pointer:${e.pointerId}`)finishHeldKey(false);};
+  el.onlostpointercapture=e=>{if(heldKey?.source===`pointer:${e.pointerId}`)finishHeldKey(false);};
+  el.onkeydown=e=>{if(!['Enter',' '].includes(e.key))return;e.preventDefault();e.stopPropagation();if(!e.repeat)beginHeldKey(key,`button:${key}`);};
+  el.onkeyup=e=>{if(!['Enter',' '].includes(e.key))return;e.preventDefault();e.stopPropagation();if(heldKey?.source===`button:${key}`)finishHeldKey(true);};
+  // Assistive activation has no physical down/up pair.
+  el.onclick=e=>{if(e.detail===0&&!heldKey)addFromKeyboard(key);};
+  $('keyboard').append(el);
 }
+function beginHeldKey(key,source) {
+  if(heldKey?.source===source)return;
+  finishHeldKey(true);stopPlayback(false);
+  if(cursor>=MAX_TICK){toast('Đã đến giới hạn độ dài bài nhạc.');return;}
+  const held={key,source,started:performance.now(),tick:cursor,tps:project.tps,duration,step,voice:null};
+  heldKey=held;document.querySelector(`.piano-key[data-key="${key}"]`)?.classList.add('held-key');
+  try {
+    const ctx=getAudio();
+    ctx.resume().then(()=>{if(heldKey===held)held.voice=voice(key,ctx.currentTime,Infinity);}).catch(e=>{if(heldKey===held)finishHeldKey(false);toast(e.message);});
+  }catch(e){finishHeldKey(false);toast(e.message);}
+}
+function finishHeldKey(write) {
+  const held=heldKey;if(!held)return;heldKey=null;
+  held.voice?.release();document.querySelector(`.piano-key[data-key="${held.key}"]`)?.classList.remove('held-key');
+  if(!write)return;
+  const ms=performance.now()-held.started;
+  const length=Math.min(MAX_TICK-held.tick,ms<200?held.duration:Math.max(1,Math.round(ms*held.tps/1000)));
+  commit(()=>{const note={id:project.nextId++,tick:held.tick,key:held.key,duration:length};project.notes=replaceNotes(project.notes,[note]);selected={kind:'note',id:note.id};cursor=Math.min(MAX_TICK-1,held.tick+(ms<200?held.step:Math.max(held.step,length)));});
+  scrollToCursor();
+}
+document.addEventListener('keyup',e=>{if(heldKey?.source===`keyboard:${e.code}`){e.preventDefault();finishHeldKey(true);}});
+window.addEventListener('blur',()=>finishHeldKey(false));
+window.addEventListener('pagehide',()=>finishHeldKey(false));
+document.addEventListener('visibilitychange',()=>{if(document.hidden)finishHeldKey(false);});
 for (const el of document.querySelectorAll('[data-control]')) el.onclick = () => commit(() => {
   const control = el.dataset.control;
   const existing = project.controls.find(c => c.tick === cursor && c.control === control);
@@ -242,9 +276,9 @@ document.onkeydown = e => {
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='c'&&groupIds.size){e.preventDefault();copyNotes();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&noteClipboard.length){e.preventDefault();pasteNotes();}
   else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='a'){e.preventDefault();groupIds=new Set(project.notes.map(n=>n.id));selected=null;render();}
-  else if(e.key==='Escape'){groupIds.clear();selected=null;render();}
+  else if(e.key==='Escape'){finishHeldKey(false);groupIds.clear();selected=null;render();}
   else if (e.ctrlKey || e.metaKey || e.altKey) return;
-  else if (/^[1-8]$/.test(e.key) && !e.repeat) addFromKeyboard(Number(e.key));
+  else if (/^[1-8]$/.test(e.key)||e.key.toLowerCase()==='i') {e.preventDefault();if(!e.repeat)beginHeldKey(e.key.toLowerCase()==='i'?8:Number(e.key),`keyboard:${e.code}`);}
   else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); }
   else if (e.code === 'Space') { e.preventDefault(); playing ? stopPlayback(false) : play(); }
 };
@@ -281,11 +315,17 @@ function getAudio() {
 function voice(key, at, seconds, pitch = 0, semitone = false) {
   const ctx = getAudio(), frequencies = [261.63,293.66,329.63,349.23,392,440,493.88,523.25];
   const frequency = frequencies[key - 1] * 2 ** (pitch + (semitone ? 1 / 12 : 0));
-  const length = Math.max(.005, Math.min(seconds, 8));
+  const sustained=seconds===Infinity;
+  const length = sustained?1:Math.max(.005,seconds);
   const release = Math.min(.05,length / 4);
-  const gain = ctx.createGain(); gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(.1, at + Math.min(.008,length / 4)); gain.gain.exponentialRampToValueAtTime(.015, at + length - release); gain.gain.linearRampToValueAtTime(0, at + length); gain.connect(ctx.destination);
-  const oscillators = [1, 2].map((multiple,i) => { const oscillator = ctx.createOscillator(); oscillator.type = i ? 'sine' : 'triangle'; oscillator.frequency.value = frequency * multiple; const volume = ctx.createGain(); volume.gain.value = i ? .15 : .7; oscillator.connect(volume); volume.connect(gain); oscillator.start(at); oscillator.stop(at + length + .001); return oscillator; });
-  const item = { oscillators, gain }; activeVoices.push(item); oscillators[0].onended = () => { activeVoices = activeVoices.filter(v => v !== item); gain.disconnect(); };
+  const gain = ctx.createGain(); gain.gain.setValueAtTime(0, at); gain.gain.linearRampToValueAtTime(.1, at + Math.min(.008,length / 4));
+  if(!sustained){gain.gain.exponentialRampToValueAtTime(.015, at + length - release);gain.gain.linearRampToValueAtTime(0, at + length);}
+  gain.connect(ctx.destination);
+  const volumes=[];
+  const oscillators = [1, 2].map((multiple,i) => { const oscillator = ctx.createOscillator(); oscillator.type = i ? 'sine' : 'triangle'; oscillator.frequency.value = frequency * multiple; const volume = ctx.createGain();volumes.push(volume); volume.gain.value = i ? .15 : .7; oscillator.connect(volume); volume.connect(gain); oscillator.start(at); if(!sustained)oscillator.stop(at + length + .001); return oscillator; });
+  let released=false;
+  const item = { oscillators, gain, release(){if(released)return;released=true;const now=ctx.currentTime;gain.gain.cancelScheduledValues(now);gain.gain.setValueAtTime(gain.gain.value,now);gain.gain.linearRampToValueAtTime(0,now+.02);for(const osc of oscillators)try{osc.stop(now+.025);}catch{}} }; activeVoices.push(item); oscillators[0].onended = () => { activeVoices = activeVoices.filter(v => v !== item);gain.disconnect();for(const volume of volumes)volume.disconnect();for(const osc of oscillators)osc.disconnect(); };
+  return item;
 }
 async function audition(key) { try { stopPlayback(false); const ctx = getAudio(); await ctx.resume(); voice(key, ctx.currentTime, .22); const el = document.querySelector(`.piano-key[data-key="${key}"]`); el?.classList.add('sounding'); setTimeout(() => el?.classList.remove('sounding'), 180); } catch(e) { toast(e.message); } }
 async function play() {
@@ -295,7 +335,7 @@ async function play() {
   try { const ctx=getAudio();await ctx.resume();stopPlayback(false);const timeline=exportSong(project).timeline;
     playbackOffset=fromTick/project.tps;startTime=ctx.currentTime+.1-playbackOffset;endTime=songEnd(project)/project.tps;
     playbackEvents=[];playbackIndex=0;lastFrameTime=ctx.currentTime;
-    for(const event of playbackSlice(timeline,fromTick))for(const key of event.keys){const seconds=Math.max(.005,event.duration_ticks/project.tps-.06);voice(key,startTime+event.tick/project.tps,seconds,event.pitch,event.semitone);playbackEvents.push({tick:event.tick,key,durationTicks:Math.min(seconds,8)*project.tps});}
+    for(const event of playbackSlice(timeline,fromTick))for(const key of event.keys){const seconds=Math.max(.005,event.duration_ticks/project.tps-.06);voice(key,startTime+event.tick/project.tps,seconds,event.pitch,event.semitone);playbackEvents.push({tick:event.tick,key,durationTicks:seconds*project.tps});}
     cursor=fromTick;selected=null;groupIds.clear();playing=true;$('playBtn').textContent='■';$('playBtn').setAttribute('aria-label','Dừng nghe thử');render();scrollToCursor();animate();
   } catch(e) { stopPlayback(false); toast(e.message); }
 }
@@ -327,6 +367,7 @@ function highlightPlaybackNote(event) {
   }
 }
 function stopPlayback(reset) {
+  finishHeldKey(false);
   playing = false; cancelAnimationFrame(animation);
   highlightPlaybackNote(null); playbackEvents = []; playbackIndex = 0;
   for (const item of activeVoices) for (const osc of item.oscillators) { try { osc.stop(); } catch {} } activeVoices = [];

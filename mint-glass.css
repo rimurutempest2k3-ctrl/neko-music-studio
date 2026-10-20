@@ -65,6 +65,8 @@ h1 {font-weight:700;}
 .keyboard {gap:10px;justify-items:center;}
 .piano-key {width:100%;height:auto;aspect-ratio:1;max-width:84px;min-height:0;border:1px solid #00ff9d85;border-radius:50%;background:#10251d;color:var(--text);justify-content:center;padding:8px 0;box-shadow:none;}
 .piano-key small {color:var(--muted);}
+.piano-key {touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;}
+.piano-key.held-key {background:#155b3c;border-color:var(--lime);color:var(--lime);}
 .piano-key:hover,.piano-key.sounding {background:#155b3c;border-color:var(--lime);box-shadow:none;color:var(--lime);}
 .piano-key.playing-key {background:#ffe2b6;color:#332415;border-color:var(--orange);box-shadow:none;}
 .inspector {background:linear-gradient(180deg,#11251d80,transparent);border-left-color:var(--line);}

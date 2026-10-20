@@ -17,3 +17,29 @@ test('password auth and owner-only pagination use correct requests without persi
  assert.match(calls[1].url,/owner_id=eq.11111111/);assert.match(calls[1].url,/offset=24/);assert.equal(calls[1].headers.Authorization,'Bearer test-access');
  assert.ok(!localStorage.getItem('neko-community-session-v1').includes('test-password'));await cloud.signOut();await assert.rejects(cloud.listMySongs());
 });
+
+test('old email accounts keep their identity and publishing uses verified account name',async()=>{
+ globalThis.localStorage=memory();globalThis.location={origin:'https://studio.example',pathname:'/'};
+ const calls=[],id='11111111-1111-1111-1111-111111111111';
+ const user={id,email:'old-account@example.com',user_metadata:{}};
+ globalThis.fetch=async(url,options)=>{
+  calls.push({url,...options});
+  let data={};
+  if(url.includes('/token'))data={access_token:'fixture-access',refresh_token:'fixture-refresh',expires_in:3600,user};
+  else if(url.includes('/auth/v1/user'))data={...user,user_metadata:{display_name:'Tên tài khoản đã xác thực'}};
+  else if(options.method==='POST'&&url.includes('/community_songs'))data=[{id:'fixture-song'}];
+  return {ok:true,json:async()=>data};
+ };
+ const cloud=await import('../cloud.mjs');
+ await cloud.signInPassword(user.email,'fixture-password');
+ assert.equal(cloud.currentUser().id,id);assert.equal(cloud.accountName(),'old-account');
+ await cloud.publishSong({title:'Bài cục bộ',ticks_per_second:20,timeline:[{type:'NOTE',tick:0,keys:[1],duration_ticks:5}]},'Tên tự nhập không được dùng');
+ const posted=calls.find(c=>c.url.includes('/community_songs'));
+ assert.equal(JSON.parse(posted.body).author,'Tên tài khoản đã xác thực');
+ assert.equal(posted.headers.Authorization,'Bearer fixture-access');
+ assert.ok(calls.find(c=>c.url.includes('/auth/v1/user')));
+ await cloud.signOut();
+ const before=calls.length;
+ await assert.rejects(cloud.publishSong({title:'Bài',timeline:[{type:'NOTE'}]}),/đăng nhập/i);
+ assert.equal(calls.length,before);
+});

@@ -30,3 +30,13 @@ cho người dùng ngoài nhóm quản trị nếu máy chủ bật xác nhận 
   để nghe toàn bài. Đổi tone trước con trỏ được giữ khi nghe từ giữa bài.
 
 Kiểm tra: `node --test tests/studio.test.mjs`; `node --check app.mjs`.
+
+## Giao diện mint và tài khoản
+
+- Studio và trang cộng đồng dùng cùng bảng màu xanh đen/mint, logo nhân vật bo góc.
+- Nút Tài khoản ở góc trên mở đăng nhập, tạo tài khoản, khôi phục mật khẩu, tên hiển thị và đăng xuất ngay tại chỗ.
+- Dùng lại hệ thống Supabase cũ: không tạo kho tài khoản mới hay đổi ID của người dùng.
+- Người đăng lấy từ tên tài khoản đã xác thực; có thể sửa tên trong khung Tài khoản. Tên mới áp dụng cho bài đăng mới.
+- Tài khoản chưa đặt tên dùng phần trước @ của email cho đến khi đặt tên hiển thị.
+- Các module dùng chung phiên đăng nhập, cập nhật trạng thái giữa Studio và trang cộng đồng.
+- Bản nháp vẫn lưu trên thiết bị; đăng nhập không tự đăng bài.

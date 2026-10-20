@@ -1,7 +1,8 @@
-import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261014-upload';
-import {moveNote,playbackSlice} from './editing.mjs?v=20261014-upload';
-import {drafts,setupLibrary} from './library.mjs?v=20261014-upload';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261014-upload';
+import {setupAccount} from './account.mjs?v=20261020-mint-account';
+import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261020-mint-account';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261020-mint-account';
+import {drafts,setupLibrary} from './library.mjs?v=20261020-mint-account';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261020-mint-account';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
@@ -443,3 +444,5 @@ $('noteGrid').onpointerup=e=>{if(!boxDrag||e.pointerId!==boxDrag.id)return;e.pre
 $('noteGrid').onpointercancel=()=>{if(!boxDrag)return;groupIds=boxDrag.original;boxDrag=null;endEdgeScroll();selectionBox.remove();render();};
 
 $('uploadBtn').onclick=()=>{stopPlayback(false);if(!project.notes.length){toast('Thêm nốt nhạc trước khi đăng bài.');return;}if(save())location.assign('community.html?publish=1');else toast('Chưa lưu được bài. Hãy xuất file để giữ bản sao.');};
+
+setupAccount();

@@ -1,5 +1,5 @@
-import {createDraftStore} from './drafts.mjs?v=20261014-tabs2';
-import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261014-tabs2';
+import {createDraftStore} from './drafts.mjs?v=20261020-mint-account';
+import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261020-mint-account';
 const $=id=>document.getElementById(id);
 export const drafts=createDraftStore(localStorage);
 export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDeleteDraft}) {
@@ -34,7 +34,7 @@ export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDelet
   if(tab==='editor')window.dispatchEvent(new Event('resize'));
  }
  document.querySelectorAll('[data-studio-tab]').forEach(button=>button.onclick=()=>show(button.dataset.studioTab));
- $('draftNew').onclick=()=>{newSong();show('editor');};$('publishedRefresh').onclick=()=>refresh();$('publishedMore').onclick=()=>refresh(true);$('publishedLogin').onclick=()=>$('communityBtn').click();
+ $('draftNew').onclick=()=>{newSong();show('editor');};$('publishedRefresh').onclick=()=>refresh();$('publishedMore').onclick=()=>refresh(true);$('publishedLogin').onclick=()=>$('accountButton').click();
  window.addEventListener('neko-account-changed',()=>{generation++;rows=[];if(tab==='published'){renderPublished();$('publishedLogin').hidden=!!currentUser();refresh();}});
  window.addEventListener('neko-published',()=>{if(tab==='published')refresh();});
  return {show};

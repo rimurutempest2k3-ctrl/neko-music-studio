@@ -12,5 +12,5 @@ export function retimeProject(project,bpm){
   for(let i=0;i<sorted.length-1;i++)sorted[i].duration=Math.min(sorted[i].duration,sorted[i+1].tick-sorted[i].tick);
   return {...project,notes,controls,tps:1000,bpm};
 }
-export function gridSteps(project){const beat=project.tps*60/tempoOf(project);return [...new Set([1,Math.max(1,Math.round(beat/4)),Math.max(1,Math.round(beat/2)),Math.max(1,Math.round(beat)),Math.max(1,Math.round(beat*2))])].sort((a,b)=>a-b);}
+export function gridSteps(project){const beat=project.tps*60/tempoOf(project);return [...new Set([1,Math.max(1,Math.round(beat/5)),Math.max(1,Math.round(beat/2)),Math.max(1,Math.round(beat)),Math.max(1,Math.round(beat*2))])].sort((a,b)=>a-b);}
 export function loopBounds(project,start,end){const songEnd=Math.max(1,...project.notes.map(n=>n.tick+n.duration),...project.controls.map(n=>n.tick+1));const a=Math.max(0,Math.round(Number(start))),b=Math.min(songEnd,Math.round(Number(end)));if(!Number.isFinite(a)||!Number.isFinite(b)||b<=a)throw new Error('Đoạn lặp cần có điểm cuối sau điểm đầu, trong phạm vi bài.');return {start:a,end:b};}

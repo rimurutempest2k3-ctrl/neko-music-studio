@@ -1,8 +1,9 @@
-import {createDraftStore} from './drafts.mjs?v=20261020-mint-account';
-import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261020-mint-account';
-import {appendPublishedTime} from './published-time.mjs?v=20261020-published-time';
+import {createDraftStore} from './drafts.mjs?v=20261021-studio2.1';
+import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261021-studio2.1';
+import {appendPublishedTime} from './published-time.mjs?v=20261021-studio2.1';
 const $=id=>document.getElementById(id);
-export const drafts=createDraftStore(localStorage);
+const qaMode=typeof location!=='undefined'&&['interaction','playback'].includes(new URLSearchParams(location.search).get('test'));
+export const drafts=createDraftStore(localStorage,qaMode?'neko-studio-drafts-qa-v2':'neko-studio-drafts-v1');
 export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDeleteDraft}) {
  let tab='editor',rows=[],page=0,busy=false,generation=0;
  const node=(tag,text)=>{const n=document.createElement(tag);n.textContent=text;return n;};

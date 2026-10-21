@@ -1,5 +1,22 @@
 # Neko Music Studio
 
+## Studio 2 — 2026-10-21
+
+- Workspace mới giữ nhận diện mint: lưới soạn trung tâm, bảng công cụ thu gọn, bảng thuộc tính và thanh phát bám khi cuộn.
+- Công cụ vẽ/chọn/tẩy, kéo nốt theo hai chiều, nâng/hạ nhóm, nhân đôi, sao chép/dán và hoàn tác.
+- BPM 20–400 tách khỏi độ chính xác tick. Đổi BPM giữ quan hệ thời gian giữa nốt, khoảng nghỉ và các lần đổi tone; lưu ở độ chính xác 1 ms.
+- Nghe thử với ba âm sắc, âm lượng master, máy đếm nhịp và đoạn lặp. Web Audio dùng bộ lập lịch theo cửa sổ thời gian, không tạo trước toàn bộ oscillator của bài.
+- Nhập MIDI loại 0/1: chọn track/kênh, chọn nốt cao/thấp khi đồng thời, xem số nốt bị chuyển cao độ. Chưa chuyển sustain pedal, SMPTE hoặc MIDI loại 2.
+- Xuất `.nekomusic`, Standard MIDI và WAV mono PCM 44,1 kHz / 16-bit. WAV giới hạn 5 phút / 5.000 nốt để giới hạn bộ nhớ; hai định dạng dữ liệu giữ giới hạn 50.000 nốt.
+- Metadata tùy chọn `editor.bpm` giữ nhịp khi mở lại. Android vẫn đọc các trường `ticks_per_second`, `timeline`, `tick`, `keys`, `duration_ticks` như trước và bỏ qua metadata này.
+- Trang cộng đồng dùng cùng bảng màu. Giữ tài khoản, bản nháp và thư viện hiện có; không chạy thay đổi schema dữ liệu.
+- Bản gốc được giữ nguyên ở `/classic/`, theo tree Git `4d2fdbcb59e80a115ba3a8c5cde17c396c4bce68`. Không sửa file bên trong bản gốc khi nâng cấp Studio.
+- Thêm `?test=interaction` hoặc `?test=playback` để dùng bài và danh sách nháp thử riêng. Không đăng bài thử lên cộng đồng.
+
+Kiểm tra đầy đủ: `node --test tests/*.test.mjs`. Bản này bổ sung kiểm tra MIDI, BPM, WAV, bộ lập lịch, đoạn lặp và liên kết tài nguyên.
+
+Đây là studio giai điệu cho hệ 8 phím Neko. Chưa có ghi microphone, phối nhiều track, VST, automation hiệu ứng hay cộng tác thời gian thực. Âm nghe thử là âm tổng hợp, không phải bản thu nhạc cụ trong game.
+
 Web soạn nhạc Delta Force cho Neko Auto Music, cùng thư viện nhạc cộng đồng.
 
 Deploy bằng GitHub Pages từ branch main, thư mục root. Không cần build.

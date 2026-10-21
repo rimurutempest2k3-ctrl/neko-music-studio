@@ -29,7 +29,8 @@ export function importSong(data) {
       if (notes.length > 50000) throw new Error('Bài nhạc quá lớn (tối đa 50.000 nốt).');
     }
   }
-  return { title: typeof data.title === 'string' ? data.title.slice(0, 100) : 'Bài không tên', tps, notes, controls, nextId: id + 1 };
+  const bpm=Number(data.editor?.bpm);
+  return { title: typeof data.title === 'string' ? data.title.slice(0, 100) : 'Bài không tên', tps, notes, controls, nextId: id + 1,...(Number.isFinite(bpm)&&bpm>=20&&bpm<=6000?{bpm}:{}) };
 }
 export function exportSong(project, { allowChords = false } = {}) {
   integer(project.tps, 1, 1000, 'Tick / giây');
@@ -57,7 +58,7 @@ export function exportSong(project, { allowChords = false } = {}) {
     const next = new Map(ticks.slice(0,-1).map((tick,index) => [tick,ticks[index+1]]));
     for (const event of timeline) if (event.type === 'NOTE' && next.has(event.tick)) event.duration_ticks = Math.min(event.duration_ticks, next.get(event.tick) - event.tick);
   }
-  return { title: project.title.trim() || 'Bài không tên', ticks_per_second: project.tps, timeline };
+  return { title: project.title.trim() || 'Bài không tên', ticks_per_second: project.tps, timeline,...(Number.isFinite(project.bpm)?{editor:{bpm:project.bpm}}:{}) };
 }
 export function conflictCount(notes) {
   const columns = new Map();

@@ -508,8 +508,9 @@ function updateGridOptions(){
   const label=value=>{const parts=barTicks()/value;return Math.abs(parts-Math.round(parts))<.03&&parts<=40?'1/'+Math.round(parts)+' ô':value+' tick';};
   for(const [id,values,current] of [['step',steps,step],['duration',lengths,duration]]){const list=[...new Set([...values,current])].sort((a,b)=>a-b);$(id).replaceChildren(...list.map(value=>{const option=make('option','',label(value));option.value=value;return option;}));$(id).value=current;}
   const base=60/beat,zoomValues=[base*2/3,base,base*5/3],options=zoomValues.map((value,i)=>{const option=make('option','',['67%','100%','167%'][i]);option.value=value;return option;});
-  if(fitMode||!zoomValues.some(value=>Math.abs(value-zoom)<.0000001)){const option=make('option','',fitMode?'Vừa bài':Math.round(zoom/base*100)+'%');option.value=zoom;options.push(option);}
-  $('zoom').replaceChildren(...options);const exact=zoomValues.find(value=>Math.abs(value-zoom)<.0000001);$('zoom').value=fitMode||exact===undefined?zoom:exact;
+  if(!fitMode&&!zoomValues.some(value=>Math.abs(value-zoom)<.0000001)){const option=make('option','',Math.round(zoom/base*100)+'%');option.value=zoom;options.push(option);}
+  const fitOption=make('option','','Vừa bài');fitOption.value='fit';options.push(fitOption);
+  $('zoom').replaceChildren(...options);const exact=zoomValues.find(value=>Math.abs(value-zoom)<.0000001);$('zoom').value=fitMode?'fit':exact===undefined?zoom:exact;
 }
 function setTool(value){tool=value;multiMode=value==='select';document.body.dataset.tool=value;$('drawTool').setAttribute('aria-pressed',String(value==='draw'));$('eraseTool').setAttribute('aria-pressed',String(value==='erase'));render();}
 function validLoop(){try{return loopRange?loopBounds(project,loopRange.start,loopRange.end):loopBounds(project,0,songEnd(project));}catch{return {start:0,end:Math.max(1,songEnd(project))};}}
@@ -526,7 +527,7 @@ $('drawTool').onclick=()=>setTool('draw');$('eraseTool').onclick=()=>setTool(too
 $('bpm').min='20';$('bpm').max='400';$('bpm').step='1';$('bpm').title='Đổi tốc độ bài nhạc · 20–400 BPM';
 $('bpm').onchange=()=>{try{const bpm=Number($('bpm').value),oldTps=project.tps,oldBpm=tempoOf(project),factor=1000/oldTps*oldBpm/bpm,value=retimeProject(project,bpm);commit(()=>{project=value;cursor=Math.min(MAX_TICK-1,Math.round(cursor*factor));step=Math.max(1,Math.round(step*factor));duration=Math.max(1,Math.round(duration*factor));zoom=Math.max(.00001,Math.min(10,zoom/factor));loopRange=null;});}catch(e){$('bpm').value=tempoOf(project);toast(e.message);}};
 $('tps').onchange=()=>{try{const tps=integer(Number($('tps').value),1,1000,'Tick / giây');commit(()=>{project.tps=tps;delete project.bpm;loopRange=null;});}catch(e){toast(e.message);$('tps').value=project.tps;}};
-$('zoom').onchange=()=>{fitMode=false;zoom=Number($('zoom').value);render();save();};$('fitBtn').onclick=()=>{fitMode=true;cursor=0;render();$('rollScroll').scrollLeft=0;renderGrid();save();};
+$('zoom').onchange=()=>{if($('zoom').value==='fit'){fitMode=true;cursor=0;}else{fitMode=false;zoom=Number($('zoom').value);}render();if(fitMode)$('rollScroll').scrollLeft=0;save();};$('fitBtn').onclick=()=>{fitMode=true;cursor=0;render();$('rollScroll').scrollLeft=0;renderGrid();save();};
 $('loopBtn').onclick=()=>{if(!project.notes.length){toast('Thêm nốt trước khi chọn đoạn lặp.');return;}stopPlayback(false);loopEnabled=!loopEnabled;$('loopBtn').setAttribute('aria-pressed',String(loopEnabled));$('loopSettings').hidden=!loopEnabled;updateLoopRegion();};
 for(const id of ['loopStart','loopEnd'])$(id).onchange=()=>{try{loopRange=loopBounds(project,$('loopStart').value,$('loopEnd').value);stopPlayback(false);updateLoopRegion();}catch(e){toast(e.message);updateLoopRegion();}};
 $('loopSelectionBtn').onclick=()=>{const notes=project.notes.filter(n=>groupIds.has(n.id));if(!notes.length){toast('Chọn một nhóm nốt trước.');return;}loopRange=loopBounds(project,Math.min(...notes.map(n=>n.tick)),Math.max(...notes.map(n=>n.tick+n.duration)));stopPlayback(false);updateLoopRegion();};

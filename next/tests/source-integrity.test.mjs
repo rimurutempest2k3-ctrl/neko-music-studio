@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+const root=path.resolve(import.meta.dirname??path.dirname(new URL(import.meta.url).pathname.replace(/^\//,'')),'..');
+const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
+test('Studio shell provides unique IDs for every direct editor control',()=>{const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]);assert.equal(new Set(ids).size,ids.length);const source=fs.readFileSync(new URL('../app.mjs',import.meta.url),'utf8'),references=[...source.matchAll(/\$\('([^']+)'\)/g)].map(m=>m[1]);const dynamic=new Set(['accountButton']);assert.deepEqual([...new Set(references)].filter(id=>!ids.includes(id)&&!dynamic.has(id)),[]);});
+test('all local module imports and stylesheets resolve, including classic assets',()=>{for(const entry of ['index.html','classic/index.html']){const content=fs.readFileSync(new URL('../'+entry,import.meta.url),'utf8');for(const match of content.matchAll(/(?:src|href)="([^"#]+\.(?:css|mjs|webp|png)(?:\?[^\"]*)?)"/g)){const url=new URL(match[1],new URL('../'+entry,import.meta.url));url.search='';assert.ok(fs.existsSync(url),match[1]);}}const sourceFiles=fs.readdirSync(new URL('../',import.meta.url)).filter(n=>n.endsWith('.mjs'));for(const file of sourceFiles){const text=fs.readFileSync(new URL('../'+file,import.meta.url),'utf8');for(const match of text.matchAll(/from\s+['"](.+?)['"]/g)){if(!match[1].startsWith('.'))continue;const url=new URL(match[1],new URL('../'+file,import.meta.url));url.search='';assert.ok(fs.existsSync(url),file+': '+match[1]);}}});

@@ -1,4 +1,4 @@
-import {MAX_TICK} from './music.mjs?v=20261020-mint-account';
+import {MAX_TICK} from './music.mjs?v=20261021-studio2.1';
 export function tempoOf(project){return project.bpm??project.tps*6;}
 export function retimeProject(project,bpm){
   if(!Number.isFinite(bpm)||bpm<20||bpm>400)throw new Error('BPM cần nằm trong khoảng 20–400.');

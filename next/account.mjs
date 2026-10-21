@@ -1,4 +1,4 @@
-import {currentUser,accountName,signInPassword,signUpPassword,resetPassword,updatePassword,updateDisplayName,refreshAccount,signOut,consumeAuthReturn} from './cloud.mjs?v=20261020-mint-account';
+import {currentUser,accountName,signInPassword,signUpPassword,resetPassword,updatePassword,updateDisplayName,refreshAccount,signOut,consumeAuthReturn} from './cloud.mjs?v=20261021-studio2.1';
 
 let panel,trigger,setLoginMode;
 export function openAccount(){

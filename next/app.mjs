@@ -1,11 +1,11 @@
-import {setupAccount} from './account.mjs?v=20261020-mint-account';
-import {createVoice,createScheduler,encodeWav} from './audio-engine.mjs?v=20261021-studio2';
-import {encodeMidi,parseMidi,convertMidiTrack} from './midi.mjs?v=20261021-studio2';
-import {tempoOf,retimeProject,gridSteps,loopBounds} from './studio-tools.mjs?v=20261021-studio2';
-import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261020-mint-account';
-import {moveNote,playbackSlice} from './editing.mjs?v=20261020-mint-account';
-import {drafts,setupLibrary} from './library.mjs?v=20261020-published-time';
-import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261020-mint-account';
+import {setupAccount} from './account.mjs?v=20261021-studio2.1';
+import {createVoice,createScheduler,encodeWav} from './audio-engine.mjs?v=20261021-studio2.1';
+import {encodeMidi,parseMidi,convertMidiTrack} from './midi.mjs?v=20261021-studio2.1';
+import {tempoOf,retimeProject,gridSteps,loopBounds} from './studio-tools.mjs?v=20261021-studio2.1';
+import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261021-studio2.1';
+import {moveNote,playbackSlice} from './editing.mjs?v=20261021-studio2.1';
+import {drafts,setupLibrary} from './library.mjs?v=20261021-studio2.1';
+import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261021-studio2.1';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];
 const testMode = new URLSearchParams(location.search).get('test');
@@ -21,6 +21,7 @@ const noteElements = new Map();
 let groupIds=new Set(),multiMode=false,noteClipboard=[];
 let tool='draw',loopEnabled=false,loopRange=null,metronome=false,scheduler=null,playGeneration=0;
 let masterGain,analyser,meterTimer=null,fitMode=false,pendingMidi=null;
+let returningProject=false;
 const barTicks=()=>project.tps*240/tempoOf(project);
 function blank() { return { title: 'Giai điệu đầu tiên', tps: 20, notes: [], controls: [], nextId: 1 }; }
 function demo() {
@@ -28,8 +29,8 @@ function demo() {
   return { title: 'Một chút bình yên', tps: 20, notes: result.notes, controls: [], nextId: result.nextId };
 }
 function toast(message) { $('toast').textContent = message; $('toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('toast').classList.remove('visible'), 4000); }
-function snapshot() { return JSON.stringify({ project, cursor, viewTicks, draftId }); }
-function restore(value) { const data = JSON.parse(value); project = data.project; draftId=data.draftId || crypto.randomUUID(); cursor = data.cursor; viewTicks = data.viewTicks; selected = null; groupIds.clear(); render(); save(); }
+function snapshot() { return JSON.stringify({ project, cursor, viewTicks, draftId,step,duration,zoom,fitMode,loopRange }); }
+function restore(value) { const data = JSON.parse(value); project = data.project; draftId=data.draftId || crypto.randomUUID(); cursor = data.cursor; viewTicks = data.viewTicks;step=data.step??step;duration=data.duration??duration;zoom=data.zoom??zoom;fitMode=data.fitMode??false;loopRange=data.loopRange??null; selected = null; groupIds.clear(); render(); save(); }
 function commit(action) { stopPlayback(false); const before = snapshot(); action(); if (snapshot() !== before) { undo.push(before); undo = undo.slice(-100); redo = []; } render(); save(); }
 function save() {
   try {
@@ -43,7 +44,7 @@ function save() {
   catch { $('saveStatus').textContent = '○ Chưa lưu · hãy xuất file'; return false; }
 }
 function load() {
-  try { const data = JSON.parse(localStorage.getItem(storageKey)); if (!data) { project = demo(); return; }
+  try { const data = JSON.parse(localStorage.getItem(storageKey)); if (!data) { project = demo(); return; } returningProject=true;
     draftId=data.draftId || crypto.randomUUID(); project = readProject(data.song); cursor = integer(data.cursor ?? 0, 0, MAX_TICK, 'Con trỏ'); viewTicks = Math.min(MAX_TICK, Math.max(160, Number(data.viewTicks) || 160));
     if (Number.isInteger(data.step)&&data.step>0&&data.step<=MAX_TICK) step = data.step;
     if (Number.isInteger(data.duration)&&data.duration>0&&data.duration<=MAX_TICK) duration = data.duration;
@@ -234,7 +235,7 @@ function beginHeldKey(key,source) {
   heldKey=held;document.querySelector(`.piano-key[data-key="${key}"]`)?.classList.add('held-key');
   try {
     const ctx=getAudio();
-    ctx.resume().then(()=>{if(heldKey===held)held.voice=voice(key,ctx.currentTime,Infinity);}).catch(e=>{if(heldKey===held)finishHeldKey(false);toast(e.message);});
+    ctx.resume().then(()=>{if(heldKey===held)held.voice=voice(key,ctx.currentTime,Infinity,...toneAtCursor());}).catch(e=>{if(heldKey===held)finishHeldKey(false);toast(e.message);});
   }catch(e){finishHeldKey(false);toast(e.message);}
 }
 function finishHeldKey(write) {
@@ -300,7 +301,7 @@ function confirmReplace(message, callback) {
 }
 $('cancelConfirm').onclick = () => $('confirmDialog').close();
 $('keepHighestBtn').onclick = () => confirmReplace('Giữ phím có số lớn nhất ở mỗi cột và bỏ các nốt còn lại. Nốt dài sẽ được thả trước nốt kế tiếp. Bạn có thể hoàn tác để khôi phục bài cũ.', () => { commit(() => { project.notes = keepHighest(project.notes); selected = null; groupIds.clear(); }); toast('Đã chuyển bài sang một nốt tại mỗi thời điểm.'); });
-function replaceProject(value,id=crypto.randomUUID()) { save(); commit(() => { draftId=id; project = value; cursor = 0; selected = null; groupIds.clear(); viewTicks = 160; }); $('rollScroll').scrollLeft = 0; }
+function replaceProject(value,id=crypto.randomUUID()) { save(); commit(() => { draftId=id; project = value;cursor=0;selected=null;groupIds.clear();viewTicks=160;step=Math.max(1,Math.round(project.tps*30/tempoOf(project)));duration=step;zoom=6*20/project.tps;fitMode=false;loopRange=null;loopEnabled=false;$('loopBtn').setAttribute('aria-pressed','false');$('loopSettings').hidden=true; }); $('rollScroll').scrollLeft = 0; }
 $('newBtn').onclick = () => confirmReplace('Bài hiện tại sẽ được thay bằng bản trống. Hãy xuất file nếu muốn giữ một bản riêng. Bạn vẫn có thể hoàn tác.', () => replaceProject(blank()));
 $('demoBtn').onclick = () => confirmReplace('Mở giai điệu mẫu để thử trình soạn. Bài hiện tại có thể khôi phục bằng Hoàn tác.', () => replaceProject(demo()));
 $('importBtn').onclick = () => $('fileInput').click();
@@ -327,7 +328,7 @@ function voice(key, at, seconds, pitch = 0, semitone = false) {
   const ctx=getAudio(),item=createVoice(ctx,masterGain,key,at,seconds,pitch,semitone,$('instrument').value);
   activeVoices.push(item);item.oscillators[0].onended=()=>{activeVoices=activeVoices.filter(v=>v!==item);item.disconnect();};startMeter();return item;
 }
-async function audition(key) { try { stopPlayback(false); const ctx = getAudio(); await ctx.resume(); voice(key, ctx.currentTime, .22); const el = document.querySelector(`.piano-key[data-key="${key}"]`); el?.classList.add('sounding'); setTimeout(() => el?.classList.remove('sounding'), 180); } catch(e) { toast(e.message); } }
+async function audition(key) { try { stopPlayback(false); const ctx = getAudio(); await ctx.resume(); voice(key, ctx.currentTime, .22,...toneAtCursor()); const el = document.querySelector(`.piano-key[data-key="${key}"]`); el?.classList.add('sounding'); setTimeout(() => el?.classList.remove('sounding'), 180); } catch(e) { toast(e.message); } }
 async function play(fromOverride) {
   if (!project.notes.length) { toast('Thêm nốt nhạc để nghe thử.'); return; }
   const range=loopEnabled?validLoop():null;
@@ -468,6 +469,7 @@ window.addEventListener('pagehide', () => { endEdgeScroll(); stopPlayback(false)
 load(); render(); save();
 new ResizeObserver(() => {
   if (cursorDrag || document.querySelector('.note.resizing')) return;
+  if(fitMode){render();return;}
   const oldTicks = viewTicks; ensureView();
   if (oldTicks !== viewTicks) { renderGrid(); updatePlayhead(); }
 }).observe($('rollScroll'));
@@ -500,7 +502,7 @@ $('uploadBtn').onclick=()=>{stopPlayback(false);if(!project.notes.length){toast(
 
 setupAccount();
 
-function readProject(data){const value=importSong(data),bpm=Number(data.editor?.bpm);if(Number.isFinite(bpm)&&bpm>=20&&bpm<=6000)value.bpm=bpm;return value;}
+function readProject(data){const value=importSong(data),bpm=Number(data.editor?.bpm);value.bpm=Number.isFinite(bpm)&&bpm>=20&&bpm<=6000?bpm:value.tps*6<=400?value.tps*6:120;return value;}
 function updateGridOptions(){
   const beat=project.tps*60/tempoOf(project),steps=gridSteps(project),lengths=[...new Set([1,Math.max(1,Math.round(beat/2)),Math.max(1,Math.round(beat)),Math.max(1,Math.round(beat*2)),Math.max(1,Math.round(beat*4))])];
   const label=value=>{const parts=barTicks()/value;return Math.abs(parts-Math.round(parts))<.03&&parts<=40?'1/'+Math.round(parts)+' ô':value+' tick';};
@@ -512,6 +514,7 @@ function validLoop(){try{return loopRange?loopBounds(project,loopRange.start,loo
 function updateLoopRegion(){const range=validLoop(),start=Number($('canvas').dataset.start)||0;const region=$('loopRegion');region.hidden=!loopEnabled;region.style.left=(Math.max(start,range.start)-start)*zoom+'px';region.style.width=Math.max(0,Math.min(start+Number($('canvas').dataset.ticks||viewTicks),range.end)-Math.max(start,range.start))*zoom+'px';$('loopStart').value=range.start;$('loopEnd').value=range.end;}
 function startMeter(){if(meterTimer!==null)return;const data=new Uint8Array(256);meterTimer=setInterval(()=>{if(!analyser)return;analyser.getByteTimeDomainData(data);let sum=0;for(const value of data)sum+=((value-128)/128)**2;const level=Math.min(100,Math.sqrt(sum/data.length)*380);$('masterMeter').style.width=level+'%';if(!activeVoices.length&&!playing){clearInterval(meterTimer);meterTimer=null;$('masterMeter').style.width='0%';}},50);}
 function clickVoice(at,accent){const ctx=getAudio(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.frequency.value=accent?1400:950;gain.gain.setValueAtTime(.09,at);gain.gain.exponentialRampToValueAtTime(.001,at+.035);osc.connect(gain);gain.connect(masterGain);osc.start(at);osc.stop(at+.04);const item={oscillators:[osc]};activeVoices.push(item);osc.onended=()=>{activeVoices=activeVoices.filter(v=>v!==item);osc.disconnect();gain.disconnect();};}
+function toneAtCursor(){let pitch=0,semitone=false;for(const event of [...project.controls].sort((a,b)=>a.tick-b.tick)){if(event.tick>cursor)break;if(event.control==='SEMITONE')semitone=!semitone;else pitch={PITCH_UP:1,PITCH_DOWN:-1,NATURAL_PITCH:0}[event.control];}return [pitch,semitone];}
 function download(bytes,type,extension){const name=project.title.replace(/[^\p{L}\p{N}_ -]/gu,'').trim().slice(0,100)||'Giai_dieu',url=URL.createObjectURL(new Blob([bytes],{type})),link=document.createElement('a');link.href=url;link.download=name+'.'+extension;link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);}
 function openMidi(buffer,name){const parsed=parseMidi(buffer);pendingMidi={...parsed,title:name.replace(/\.midi?$/i,'').slice(0,100)};$('midiTrack').replaceChildren(...parsed.tracks.map((track,i)=>{const option=make('option','',track.name+' · '+track.notes.length+' nốt');option.value=i;option.disabled=track.channel===9;return option;}));const first=parsed.tracks.findIndex(t=>t.channel!==9);if(first<0)throw new Error('File này chỉ chứa bè trống. Hãy chọn một MIDI có giai điệu.');$('midiTrack').value=first;updateMidiSummary();$('midiDialog').showModal();}
 function updateMidiSummary(){if(!pendingMidi)return;const {summary}=convertMidiTrack(pendingMidi.tracks[Number($('midiTrack').value)],$('midiPolicy').value,pendingMidi.title);$('midiSummary').textContent=`${summary.input} nốt → ${summary.output} nốt. ${summary.adjusted} nốt đổi quãng / làm tròn cao độ; ${summary.reduced} nốt đồng thời được rút gọn. Các nốt chồng nhau sẽ cắt ngắn ở nốt kế tiếp.`+(pendingMidi.hasPedal?' Pedal sustain chưa được chuyển đổi.':'');}
@@ -536,7 +539,7 @@ document.querySelectorAll('[data-close-dialog]').forEach(button=>button.onclick=
 $('exportMidi').onclick=()=>{try{const song=exportSong(project);if(!project.notes.length)throw new Error('Thêm nốt trước khi xuất MIDI.');download(encodeMidi(song,tempoOf(project)),'audio/midi','mid');$('exportStatus').textContent='Đã xuất MIDI, gồm cao độ và các lần đổi tone.';}catch(e){$('exportStatus').textContent=e.message;}};
 $('exportWav').onclick=async()=>{const button=$('exportWav');if(button.disabled)return;try{if(!project.notes.length)throw new Error('Thêm nốt trước khi xuất WAV.');const seconds=songEnd(project)/project.tps;if(seconds>300||project.notes.length>5000)throw new Error('Xuất WAV hiện hỗ trợ tối đa 5 phút và 5.000 nốt. MIDI và .nekomusic vẫn xuất toàn bài.');const Offline=window.OfflineAudioContext||window.webkitOfflineAudioContext;if(!Offline)throw new Error('Trình duyệt này chưa hỗ trợ xuất WAV.');button.disabled=true;$('exportStatus').textContent='Đang kết xuất âm thanh…';const ctx=new Offline(1,Math.ceil((seconds+.1)*44100),44100),gain=ctx.createGain();gain.gain.value=Number($('masterVolume').value)/100;gain.connect(ctx.destination);for(const event of playbackSlice(exportSong(project).timeline,0))for(const key of event.keys)createVoice(ctx,gain,key,event.tick/project.tps,Math.max(.005,event.duration_ticks/project.tps-.015),event.pitch,event.semitone,$('instrument').value);const rendered=await ctx.startRendering();download(encodeWav(rendered.getChannelData(0),44100),'audio/wav','wav');$('exportStatus').textContent='Đã xuất WAV 44,1 kHz · 16-bit · mono.';}catch(e){$('exportStatus').textContent=e.message;}finally{button.disabled=false;}};
 $('dismissWelcome').onclick=()=>{$('welcomeCard').hidden=true;try{localStorage.setItem('neko-studio-welcome-dismissed','1');}catch{}};
-try{$('welcomeCard').hidden=localStorage.getItem('neko-studio-welcome-dismissed')==='1';const prefs=JSON.parse(localStorage.getItem('neko-studio-audio-v2')||'null');if(prefs){if(['soft','pluck','flute'].includes(prefs.instrument))$('instrument').value=prefs.instrument;if(Number.isFinite(prefs.volume))$('masterVolume').value=Math.max(0,Math.min(100,prefs.volume));$('volumeValue').value=$('masterVolume').value+'%';}}catch{}
+try{$('welcomeCard').hidden=returningProject||localStorage.getItem('neko-studio-welcome-dismissed')==='1';const prefs=JSON.parse(localStorage.getItem('neko-studio-audio-v2')||'null');if(prefs){if(['soft','pluck','flute'].includes(prefs.instrument))$('instrument').value=prefs.instrument;if(Number.isFinite(prefs.volume))$('masterVolume').value=Math.max(0,Math.min(100,prefs.volume));$('volumeValue').value=$('masterVolume').value+'%';}}catch{}
 function savePreferences(){try{localStorage.setItem('neko-studio-audio-v2',JSON.stringify({instrument:$('instrument').value,volume:Number($('masterVolume').value)}));}catch{}}
 $('focusBtn').onclick=()=>{const active=document.body.classList.toggle('focus-mode');$('focusBtn').setAttribute('aria-pressed',String(active));requestAnimationFrame(()=>{render();});};
 function togglePanel(kind){const className='show-'+kind,button=kind==='tools'?$('mobileTools'):$('mobileProperties'),show=!document.body.classList.contains(className);document.body.classList.remove('show-tools','show-properties');$('mobileTools').setAttribute('aria-expanded','false');$('mobileProperties').setAttribute('aria-expanded','false');if(show)document.body.classList.add(className);button.setAttribute('aria-expanded',String(show));}

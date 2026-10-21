@@ -1,5 +1,5 @@
-import {MIDI_KEYS} from './audio-engine.mjs?v=20261021-studio2';
-import {playbackSlice} from './editing.mjs?v=20261020-mint-account';
+import {MIDI_KEYS} from './audio-engine.mjs?v=20261021-studio2.1';
+import {playbackSlice} from './editing.mjs?v=20261021-studio2.1';
 const ascii=value=>Array.from(value,c=>c.charCodeAt(0));
 const u32=value=>[(value>>>24)&255,(value>>>16)&255,(value>>>8)&255,value&255];
 function vlq(value){if(!Number.isSafeInteger(value)||value<0||value>0x0fffffff)throw new Error('Khoảng cách MIDI vượt giới hạn.');const bytes=[value&127];while(value>>>=7)bytes.unshift((value&127)|128);return bytes;}

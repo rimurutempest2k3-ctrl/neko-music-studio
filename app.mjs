@@ -64,7 +64,7 @@ function render() {
   ensureView();
   $('title').value = project.title; $('songHeading').textContent = project.title.trim() || 'Bài không tên'; $('tps').value = project.tps;
   $('step').value = step; $('duration').value = duration; $('zoom').value = zoom;
-  const bpm = tempoOf(project); $('bpm').value=bpm; updateGridOptions(); updateLoopRegion();
+  const bpm = Number(tempoOf(project).toFixed(2)); $('bpm').value=bpm; updateGridOptions(); updateLoopRegion();
   $('tempoBadge').textContent = `${bpm} BPM`; $('tempoHint').textContent = `${bpm} BPM · 1 tick = ${(1000 / project.tps).toFixed(1)} ms`;
   updateRestHint();
   $('undoBtn').disabled = !undo.length; $('redoBtn').disabled = !redo.length;

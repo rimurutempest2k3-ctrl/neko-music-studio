@@ -13,7 +13,7 @@
 - Bản gốc được giữ nguyên ở `/classic/`, theo tree Git `4d2fdbcb59e80a115ba3a8c5cde17c396c4bce68`. Không sửa file bên trong bản gốc khi nâng cấp Studio.
 - Thêm `?test=interaction` hoặc `?test=playback` để dùng bài và danh sách nháp thử riêng. Không đăng bài thử lên cộng đồng.
 
-Kiểm tra đầy đủ: `node --test tests/*.test.mjs`. Bản này bổ sung kiểm tra MIDI, BPM, WAV, bộ lập lịch, đoạn lặp và liên kết tài nguyên.
+Kiểm tra đầy đủ: `node --test tests`. Bản này bổ sung kiểm tra MIDI, BPM, WAV, bộ lập lịch, đoạn lặp và liên kết tài nguyên.
 
 Đây là studio giai điệu cho hệ 8 phím Neko. Chưa có ghi microphone, phối nhiều track, VST, automation hiệu ứng hay cộng tác thời gian thực. Âm nghe thử là âm tổng hợp, không phải bản thu nhạc cụ trong game.
 

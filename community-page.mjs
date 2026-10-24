@@ -1,5 +1,6 @@
-import {setupAccount,openAccount} from './account.mjs?v=20261021-studio2.1';
-import {setupCommunity} from './community.mjs?v=20261021-studio2.1';
+import './i18n.mjs?v=20261024-languages';
+import {setupAccount,openAccount} from './account.mjs?v=20261024-languages';
+import {setupCommunity} from './community.mjs?v=20261024-languages';
 import {importSong,exportSong} from './music.mjs?v=20261021-studio2.1';
 let toastTimer;
 function toast(message){const node=document.getElementById('toast');node.textContent=message;node.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>node.classList.remove('visible'),4000);}

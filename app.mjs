@@ -1,10 +1,11 @@
-import {setupAccount} from './account.mjs?v=20261021-studio2.1';
+import './i18n.mjs?v=20261024-languages';
+import {setupAccount} from './account.mjs?v=20261024-languages';
 import {createVoice,createScheduler,encodeWav} from './audio-engine.mjs?v=20261021-studio2.1';
 import {encodeMidi,parseMidi,convertMidiTrack} from './midi.mjs?v=20261021-studio2.1';
 import {tempoOf,retimeProject,gridSteps,loopBounds} from './studio-tools.mjs?v=20261021-studio2.1';
 import {groupDelta,moveGroup,copyGroup,pasteGroup,notesInBox} from './selection.mjs?v=20261021-studio2.1';
 import {moveNote,playbackSlice} from './editing.mjs?v=20261021-studio2.1';
-import {drafts,setupLibrary} from './library.mjs?v=20261021-studio2.1';
+import {drafts,setupLibrary} from './library.mjs?v=20261024-languages';
 import { CONTROLS, MAX_TICK, importSong, exportSong, songEnd, parseSequence, insertRest, conflictCount, replaceNotes, keepHighest, resizeDuration, timelineTicks, playbackFrame, followScrollTarget, smoothScroll, activePlaybackEvent, diagnostics, integer } from './music.mjs?v=20261021-studio2.1';
 const $ = id => document.getElementById(id);
 const names = ['Do', 'Re', 'Mi', 'Fa', 'Sol', 'La', 'Si', 'Do↑'];

@@ -1,3 +1,4 @@
+import {t,currentLanguage} from './i18n.mjs?v=20261024-languages';
 import {createDraftStore} from './drafts.mjs?v=20261021-studio2.1';
 import {currentUser,listMySongs,getSong,hideSong} from './cloud.mjs?v=20261021-studio2.1';
 import {appendPublishedTime} from './published-time.mjs?v=20261021-studio2.1';
@@ -10,13 +11,13 @@ export function setupLibrary({openDraft,openPublished,newSong,stop,toast,onDelet
  function renderDrafts() {
   const list=$('libraryList');list.replaceChildren();
   try { const rows=drafts.list().sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-   for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.song.title||'Bài không tên'),node('p','Đã lưu '+new Date(row.updatedAt).toLocaleString('vi-VN')));const actions=node('div','');actions.className='community-actions';const open=node('button','Tiếp tục soạn');open.onclick=()=>{try{openDraft(row);show('editor');}catch(e){toast(e.message);}};const remove=node('button','Xóa nháp');remove.className='danger';remove.onclick=()=>{if(confirm('Xóa bản nháp này?')){try{onDeleteDraft(row.id);drafts.remove(row.id);renderDrafts();}catch(e){toast(e.message);}}};actions.append(open,remove);card.append(detail,actions);list.append(card);}
+   for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.song.title||'Bài không tên'),node('p','Đã lưu '+new Date(row.updatedAt).toLocaleString(currentLanguage())));const actions=node('div','');actions.className='community-actions';const open=node('button','Tiếp tục soạn');open.onclick=()=>{try{openDraft(row);show('editor');}catch(e){toast(e.message);}};const remove=node('button','Xóa nháp');remove.className='danger';remove.onclick=()=>{if(confirm(t('Xóa bản nháp này?'))){try{onDeleteDraft(row.id);drafts.remove(row.id);renderDrafts();}catch(e){toast(e.message);}}};actions.append(open,remove);card.append(detail,actions);list.append(card);}
    $('libraryStatus').textContent=rows.length?`${rows.length} bản nháp · Lưu trên trình duyệt này`:'Chưa có bản nháp. Tạo bài mới để bắt đầu.';
   }catch(e){$('libraryStatus').textContent=e.message;}
  }
  function renderPublished() {
   $('libraryList').replaceChildren();
-  for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.title),node('p',`${row.author} · ${row.note_count} nốt`));appendPublishedTime(detail,row.created_at);const actions=node('div','');actions.className='community-actions';const open=node('button','Mở thành bản nháp');open.onclick=async()=>{try{await openPublished(await getSong(row.id));show('editor');}catch(e){toast(e.message);}};const remove=node('button','Gỡ bài');remove.className='danger';remove.onclick=async()=>{if(busy||!confirm('Gỡ bài này khỏi thư viện công khai?'))return;busy=true;try{await hideSong(row.id);rows=rows.filter(r=>r.id!==row.id);renderPublished();}catch(e){toast(e.message);}finally{busy=false;}};actions.append(open,remove);card.append(detail,actions);$('libraryList').append(card);}
+  for(const row of rows) {const card=node('article','');card.className='community-song';const detail=node('div','');detail.append(node('h3',row.title),node('p',`${row.author} · ${row.note_count} nốt`));appendPublishedTime(detail,row.created_at);const actions=node('div','');actions.className='community-actions';const open=node('button','Mở thành bản nháp');open.onclick=async()=>{try{await openPublished(await getSong(row.id));show('editor');}catch(e){toast(e.message);}};const remove=node('button','Gỡ bài');remove.className='danger';remove.onclick=async()=>{if(busy||!confirm(t('Gỡ bài này khỏi thư viện công khai?')))return;busy=true;try{await hideSong(row.id);rows=rows.filter(r=>r.id!==row.id);renderPublished();}catch(e){toast(e.message);}finally{busy=false;}};actions.append(open,remove);card.append(detail,actions);$('libraryList').append(card);}
   $('libraryStatus').textContent=rows.length?`${rows.length} bài đã đăng`:'Bạn chưa đăng bài nào.';
  }
  async function refresh(more=false) {

@@ -35,7 +35,7 @@ export function setupAccount(){
  let busy=false,registering=false;
  const status=text=>{$('accountStatus').textContent=text;};
  function render(){
-  const user=currentUser();$('accountButtonLabel').textContent=user?accountName(user):'Tài khoản';
+  const user=currentUser();if(user)$('accountButtonLabel').dataset.userContent='';else delete $('accountButtonLabel').dataset.userContent;$('accountButtonLabel').textContent=user?accountName(user):'Tài khoản';
   trigger.title=user?'Quản lý tài khoản':'Đăng nhập / tạo tài khoản';
   $('accountLoginForm').hidden=!!user;$('accountProfile').hidden=!user;
   $('accountEmailLabel').textContent=user?.email||'';

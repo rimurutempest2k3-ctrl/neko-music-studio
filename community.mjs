@@ -1,3 +1,4 @@
+import {t,currentLanguage} from './i18n.mjs?v=20261024-languages';
 import {currentUser,accountName,listSongs,getSong,publishSong,hideSong} from './cloud.mjs?v=20261021-studio2.1';
 import {importSong,exportSong} from './music.mjs?v=20261021-studio2.1';
 import {appendPublishedTime} from './published-time.mjs?v=20261021-studio2.1';
@@ -18,7 +19,7 @@ export function setupCommunity({getCurrentSong,loadSong,toast}) {
    const actions=node('div','','community-actions');
    const download=node('button','↓ Tải bài'); download.onclick=()=>guarded(async()=>{const song=exportSong(importSong(await getSong(row.id))); const url=URL.createObjectURL(new Blob([JSON.stringify(song,null,2)],{type:'application/json'})); const a=node('a',''); a.href=url; a.download=row.title.replace(/[<>:"/\\|?*]/g,'_')+'.nekomusic'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),10000);});
    const open=node('button','Mở trong Studio'); open.onclick=()=>guarded(async()=>{await loadSong(await getSong(row.id));}); actions.append(open,download);
-   if(row.owner_id===currentUser()?.id) {const remove=node('button','Gỡ bài','danger'); remove.onclick=()=>guarded(async()=>{if(!confirm('Gỡ bài này khỏi thư viện công khai?')) return; await hideSong(row.id); rows=rows.filter(r=>r.id!==row.id); render(); status('Đã gỡ bài.');}); actions.append(remove);}
+   if(row.owner_id===currentUser()?.id) {const remove=node('button','Gỡ bài','danger'); remove.onclick=()=>guarded(async()=>{if(!confirm(t('Gỡ bài này khỏi thư viện công khai?'))) return; await hideSong(row.id); rows=rows.filter(r=>r.id!==row.id); render(); status('Đã gỡ bài.');}); actions.append(remove);}
    card.append(details,actions); $('communityList').append(card);
   }
   if(!$('communityList').children.length) $('communityList').append(node('p',query?'Không tìm thấy trong các bài đã tải.':'Thư viện chưa có bài. Hãy chia sẻ giai điệu đầu tiên.','hint'));
